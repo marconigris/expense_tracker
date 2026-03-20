@@ -1067,8 +1067,19 @@ def main():
         
         init_session_state()
         
-        # Handle chat input
-        if prompt := st.chat_input("What's the transaction?"):
+        # Handle transaction input - positioned above chat history
+        with st.form(key="input_form", clear_on_submit=True):
+            col1, col2 = st.columns([8, 1])
+            with col1:
+                prompt = st.text_input(
+                    label="transaction_input",
+                    placeholder="What's the transaction?",
+                    label_visibility="collapsed"
+                )
+            with col2:
+                submitted = st.form_submit_button("➤", use_container_width=True)
+
+        if submitted and prompt:
             log.debug(f"Received user input: {prompt}")
             st.session_state.messages.append({"role": "user", "content": prompt})
 
