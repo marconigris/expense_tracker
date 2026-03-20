@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
 import sys
+import json
 import os
 from google.oauth2 import service_account
 from googleapiclient.discovery import build # type: ignore
@@ -20,8 +21,8 @@ load_dotenv()
 def get_google_sheets_service():
     """Cache Google Sheets credentials and service"""
     try:
-        creds = service_account.Credentials.from_service_account_file(
-            os.getenv('GOOGLE_SHEETS_CREDENTIALS'),
+        creds = service_account.Credentials.from_service_account_info(
+            json.loads(os.getenv('GOOGLE_SHEETS_CREDENTIALS')),
             scopes=['https://www.googleapis.com/auth/spreadsheets']
         )
         service = build('sheets', 'v4', credentials=creds)
