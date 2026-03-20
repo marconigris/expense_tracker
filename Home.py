@@ -383,7 +383,7 @@ def classify_transaction_type(text: str) -> dict[str, Any]:
         
         log.debug("🤖 Sending classification prompt to Gemini")
         response_text_raw = generate_text(prompt)
-        lines = response.text.strip().split('\n')
+        lines = response_text_raw.strip().split('\n')
         result: dict[str, Any] = {}
         
         for line in lines:
