@@ -34,33 +34,29 @@ def _parse_date(date_str: str) -> str:
         except ValueError:
             continue
 
-    log.warning(f"Could not parse date: {date_str}, using today instead")
+    log.warning(f"Could not parse date: {date_str}, usando hoy")
     return today.isoformat()
 
 
 def _safe_category(cat: str) -> str:
     if not cat:
         return "Other"
-
     if cat in CATEGORIES:
         return cat
-
     return "Other"
 
 
 def _safe_transaction_type(tx_type: str) -> str:
     if not tx_type:
         return "expense"
-
     if tx_type in TRANSACTION_TYPES:
         return tx_type
-
     return "expense"
 
 
 def process_user_input(prompt: str) -> Dict[str, Any]:
     """
-    Llama al modelo (Gemini) para extraer:
+    Usa Gemini para extraer:
     - date
     - amount
     - type
@@ -74,8 +70,8 @@ def process_user_input(prompt: str) -> Dict[str, Any]:
     full_prompt = f"""
 You are an AI that extracts structured transaction data from natural language.
 
-Return a JSON object with the following keys:
-- date (string, e.g. '2024-01-31')
+Return ONLY a JSON object with the following keys:
+- date (string, e.g. "2024-01-31")
 - amount (number)
 - type (one of: {", ".join(TRANSACTION_TYPES)})
 - category (one of: {", ".join(CATEGORIES)})
@@ -87,10 +83,9 @@ If something is missing, make a reasonable guess.
 User input: {prompt}
 """
 
-    model_response = generate_text(
-        full_prompt,
-        json_mode=True,
-    )
+    # generate_text de tu proyecto NO acepta system_instruction ni json_mode,
+    # así que solo le pasamos el prompt grande.
+    model_response = generate_text(full_prompt)
 
     if not isinstance(model_response, dict):
         log.warning(f"Model did not return a dict. Raw: {model_response}")
