@@ -1091,7 +1091,7 @@ def main():
     
     except Exception as e:
         log.error(f"❌ Application error: {str(e)}", exc_info=True)
-        st.error("An unexpected error occurred. Please try again later.")
+        st.error(str(e) if str(e) else "An unexpected error occurred. Please try again later.")
 
 if __name__ == "__main__":
     main()
