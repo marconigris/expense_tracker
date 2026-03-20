@@ -1079,7 +1079,7 @@ def main():
             with col2:
                 submitted = st.form_submit_button("➤", use_container_width=True)
 
-        if submitted and prompt:
+        if submitted and prompt:             st.session_state.messages = []             st.session_state.current_transaction = None
             log.debug(f"Received user input: {prompt}")
             st.session_state.messages.append({"role": "user", "content": prompt})
 
