@@ -1,12 +1,11 @@
+from __future__ import annotations
+
 from typing import Any
+
 import streamlit as st
 
 from utils.logging_utils import setup_logging
-from services.google_sheets import get_sheets_service
-from services.gemini_service import generate_text
-from config.constants import CATEGORIES, TRANSACTION_TYPES
 from state import (
-    init_session_state,
     get_messages,
     add_message,
     clear_current_transaction,
@@ -14,6 +13,7 @@ from state import (
     set_current_transaction,
 )
 from processing import process_user_input
+from bootstrap import ensure_startup, render_global_header
 
 log = setup_logging("expense_tracker_home")
 
@@ -84,7 +84,9 @@ def render() -> None:
     - mensajes
     - log
     """
-    init_session_state()
+    # Arranque común (session_state + Google Sheets + header)
+    ensure_startup()
+    render_global_header()
 
     submitted, prompt = render_input_box()
 
