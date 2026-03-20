@@ -14,6 +14,7 @@ from state import (
 )
 from processing import process_user_input
 from bootstrap import ensure_startup, render_global_header
+from services.google_sheets import append_transactions
 
 log = setup_logging("expense_tracker_home")
 
@@ -26,7 +27,7 @@ def render_input_box() -> tuple[bool, str]:
         with col1:
             prompt = st.text_input(
                 label="transaction_input",
-                placeholder="What's the transaction?",
+                placeholder="Describe your transaction (e.g. Yesterday I spent 50 on groceries)",
                 label_visibility="collapsed",
             )
         with col2:
@@ -46,6 +47,20 @@ def render_confirmation_box(tx: dict[str, Any] | None) -> None:
         st.write(f"Subcategory: {tx.get('subcategory')}")
         st.write(f"Description: {tx.get('description')}")
 
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            confirm = st.button("✅ Confirm & Save", key="confirm_save", use_container_width=True)
+        with col2:
+            cancel = st.button("❌ Cancel", key="cancel_tx", use_container_width=True)
+
+        if confirm:
+            _save_transaction_to_sheet(tx)
+        if cancel:
+            clear_current_transaction()
+            add_message("assistant", "Okay, I discarded this transaction.")
+
 
 def render_messages_log() -> None:
     st.subheader("Log")
@@ -56,11 +71,36 @@ def render_messages_log() -> None:
 
 # ---------- CONTROLLER ----------
 
+def _save_transaction_to_sheet(tx: dict[str, Any]) -> None:
+    """
+    Save the confirmed transaction to Google Sheets.
+    """
+    try:
+        # Simple convention: use the "Expenses" sheet and let Sheets find next row.
+        values = [[
+            tx.get("date"),
+            tx.get("amount"),
+            tx.get("type"),
+            tx.get("category"),
+            tx.get("subcategory"),
+            tx.get("description"),
+        ]]
+        append_transactions("Expenses", values)
+        clear_current_transaction()
+
+        msg = "Transaction saved to Google Sheets ✅"
+        add_message("assistant", msg)
+        st.success(msg)
+    except Exception as e:
+        log.error(f"Failed to save transaction: {e}")
+        st.error("Failed to save transaction. Please try again.")
+
+
 def handle_new_prompt(prompt: str) -> None:
     if not prompt:
         return
 
-    # reset estado de la conversación para nueva transacción
+    # reset state for new transaction
     st.session_state.messages = []
     clear_current_transaction()
 
@@ -70,21 +110,19 @@ def handle_new_prompt(prompt: str) -> None:
     extracted_info = process_user_input(prompt)
     set_current_transaction(extracted_info)
 
-    # mensaje simple al usuario
-    add_message("assistant", "Procesé la transacción, revisá la caja de confirmación 👇")
+    add_message("assistant", "I processed your transaction, please review the confirmation box 👇")
 
 
 # ---------- PUBLIC ENTRYPOINT ----------
 
 def render() -> None:
     """
-    Renderiza la pantalla Home:
+    Render Home screen:
     - input
-    - confirmación
-    - mensajes
+    - confirmation
+    - messages
     - log
     """
-    # Arranque común (session_state + Google Sheets + header)
     ensure_startup()
     render_global_header()
 
