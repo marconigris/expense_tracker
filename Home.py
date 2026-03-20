@@ -2,7 +2,7 @@ from logging import Logger
 from typing import Any
 import streamlit as st
 import pandas as pd
-import google.generativeai as genai
+from services.gemini_service import generate_text
 import plotly.express as px
 from datetime import datetime, timedelta
 import os
@@ -27,8 +27,8 @@ st.set_page_config (layout='wide')
 def get_gemini_model() -> Any:
     """Cache Gemini AI configuration"""
     try:
-        genai.configure(api_key=os.getenv('GEMINI_API_KEY')) # type: ignore
-        model: Any = genai.GenerativeModel('gemini-1.5-flash-latest') # type: ignore
+        pass # Gemini configured via services/gemini_service.py
+        return True # model initialized via gemini_service
         log.info("🤖 Gemini AI configured successfully")
         return model
     except Exception as e:
@@ -338,7 +338,7 @@ def validate_amount(amount_str: str) -> float:
         log.error(f"❌ Invalid amount: {amount_str}")
         raise ValueError(f"Invalid amount: {amount_str}") from e
 
-def classify_transaction_type(text: str, model: Any) -> dict[str, Any]:
+def classify_transaction_type(text: str) -> dict[str, Any]:
     """
     Use Gemini to classify the type of transaction.
     """
@@ -346,7 +346,7 @@ def classify_transaction_type(text: str, model: Any) -> dict[str, Any]:
         log.info("🔍 Starting transaction classification")
         log.debug(f"Input text: {text}")
         
-        chat = model.start_chat(history=[])
+        # using generate_text service
         prompt = f"""
         Classify this transaction: '{text}'
         
@@ -382,7 +382,7 @@ def classify_transaction_type(text: str, model: Any) -> dict[str, Any]:
         """
         
         log.debug("🤖 Sending classification prompt to Gemini")
-        response = chat.send_message(prompt)
+        response_text_raw = generate_text(prompt)
         lines = response.text.strip().split('\n')
         result: dict[str, Any] = {}
         
@@ -565,7 +565,7 @@ def process_user_input(text: str) -> dict[str, Any]:
         
         # First, classify the transaction type
         log.debug("Step 1: Classifying transaction type")
-        classification = classify_transaction_type(text, model)
+        classification = classify_transaction_type(text)
         transaction_type = classification.get('type', '')
         
         try:
@@ -598,7 +598,7 @@ def process_user_input(text: str) -> dict[str, Any]:
             
         # For other types, get detailed transaction info
         log.debug("Step 2: Getting detailed transaction info")
-        chat = model.start_chat(history=[])
+        # using generate_text service
         prompt = f"""
         Extract transaction information from this text: '{text}'
         Transaction was classified as: {transaction_type}
@@ -640,8 +640,8 @@ def process_user_input(text: str) -> dict[str, Any]:
         """
         
         log.debug("🤖 Sending detail extraction prompt to Gemini")
-        response = chat.send_message(prompt)
-        response_text: str = response.text
+        response_text_raw = generate_text(prompt)
+        response_text: str = response_text_raw
         lines: list[str] = response_text.strip().split('\n')
         extracted_info: dict[str, Any] = {}
         
@@ -761,8 +761,8 @@ def get_sheet_url() -> str:
 
 @st.cache_resource  # Cache for the entire session
 def initialize_gemini() -> Any:
-    genai.configure(api_key=os.getenv('GEMINI_API_KEY')) # type: ignore
-    return genai.GenerativeModel('gemini-1.5-flash-latest') # type: ignore
+    pass # Gemini configured via services/gemini_service.py
+    return True # model initialized via gemini_service
 
 @st.cache_data
 def get_subcategories(trans_type: str, category: str) -> list[str]:
