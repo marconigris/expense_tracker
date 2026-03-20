@@ -109,4 +109,18 @@ If something is missing, make a reasonable guess.
     tx_type = _safe_transaction_type(raw_type)
     category = _safe_category(raw_category)
 
-    if amount
+    if amount is None:
+        log.warning(f"Could not parse amount from: {raw_amount}, defaulting to 0")
+        amount = 0.0
+
+    extracted = {
+        "date": date,
+        "amount": amount,
+        "type": tx_type,
+        "category": category,
+        "subcategory": subcategory or "General",
+        "description": description or prompt,
+    }
+
+    log.debug(f"Extracted transaction: {extracted}")
+    return extracted
