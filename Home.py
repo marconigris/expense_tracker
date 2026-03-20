@@ -28,7 +28,7 @@ def get_gemini_model() -> Any:
     """Cache Gemini AI configuration"""
     try:
         genai.configure(api_key=os.getenv('GEMINI_API_KEY')) # type: ignore
-        model: Any = genai.GenerativeModel('gemini-2.0-flash') # type: ignore
+        model: Any = genai.GenerativeModel('gemini-1.5-flash-8b') # type: ignore
         log.info("🤖 Gemini AI configured successfully")
         return model
     except Exception as e:
@@ -762,7 +762,7 @@ def get_sheet_url() -> str:
 @st.cache_resource  # Cache for the entire session
 def initialize_gemini() -> Any:
     genai.configure(api_key=os.getenv('GEMINI_API_KEY')) # type: ignore
-    return genai.GenerativeModel('gemini-2.0-flash') # type: ignore
+    return genai.GenerativeModel('gemini-1.5-flash-8b') # type: ignore
 
 @st.cache_data
 def get_subcategories(trans_type: str, category: str) -> list[str]:
