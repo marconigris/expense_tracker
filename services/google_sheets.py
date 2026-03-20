@@ -10,12 +10,13 @@ import streamlit as st
 
 logger = logging.getLogger(__name__)
 
-SPREADSHEET_ID_ENV_VAR = "GOOGLE_SHEETS_SPREADSHEET_ID"
+# Usamos el mismo nombre de variable que tu Home.py original
+SPREADSHEET_ID_ENV_VAR = "GOOGLE_SHEET_ID"
 
 
 @st.cache_resource
 def get_sheets_service():
-    """Cache Google Sheets service configuration"""
+    """Cache Google Sheets service configuration."""
     try:
         creds_json = os.getenv("GOOGLE_SHEETS_CREDENTIALS")
         if creds_json is None:
@@ -35,29 +36,25 @@ def get_sheets_service():
 
 def verify_sheets_setup() -> None:
     """
-    Verifica que el servicio de Sheets y el ID de la hoja estén configurados.
-    Lanza excepción si falta algo o no hay acceso.
+    Verificación suave: solo intenta crear el servicio.
+    No hace fallar toda la app si hay problema con el ID; esos errores
+    se manejarán cuando realmente leamos/escribamos.
     """
-    service = get_sheets_service()
-
-    spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
-    if not spreadsheet_id:
-        raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} environment variable not set")
-
     try:
-        service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+        _ = get_sheets_service()
+        logger.info("Google Sheets service initialized correctly")
     except Exception as e:
-        logger.exception("Error verifying Google Sheets setup")
-        raise RuntimeError(f"Error verifying Google Sheets setup: {e}") from e
+        logger.exception("Error verifying Google Sheets service")
+        # No relanzamos para que la app pueda seguir levantando
 
 
-def get_sheet_url() -> str:
+def get_sheet_url() -> str | None:
     """
-    Devuelve la URL del Google Sheet principal.
+    Devuelve la URL del Google Sheet principal si el ID está configurado.
     """
     spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
     if not spreadsheet_id:
-        raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} environment variable not set")
+        return None
 
     return f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
 
@@ -65,8 +62,7 @@ def get_sheet_url() -> str:
 def append_transactions(range_name: str, values: List[List[Any]]) -> None:
     """
     Agrega filas a la hoja en el rango indicado.
-    No la estamos usando todavía desde la nueva Home, pero se deja lista
-    para cuando quieras guardar las transacciones.
+    Lista para usar cuando quieras guardar transacciones.
     """
     service = get_sheets_service()
     spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
