@@ -31,7 +31,7 @@ def generate_text(prompt: str, max_retries: int = 3) -> str:
             return response.text
         except ClientError as e:
             if '429' in str(e) or 'RESOURCE_EXHAUSTED' in str(e):
-                wait_time = (attempt + 1) * 10
+                wait_time = 30
                 time.sleep(wait_time)
                 if attempt == max_retries - 1:
                     raise
@@ -39,7 +39,7 @@ def generate_text(prompt: str, max_retries: int = 3) -> str:
                 raise
         except Exception as e:
             if 'RESOURCE_EXHAUSTED' in str(e) or '429' in str(e):
-                wait_time = (attempt + 1) * 10
+                wait_time = 30
                 time.sleep(wait_time)
                 if attempt == max_retries - 1:
                     raise
