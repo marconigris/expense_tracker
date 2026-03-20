@@ -63,4 +63,26 @@ def get_sheet_url() -> str:
 
 
 def append_transactions(range_name: str, values: List[List[Any]]) -> None:
+    """
+    Agrega filas a la hoja en el rango indicado.
+    No la estamos usando todavía desde la nueva Home, pero se deja lista
+    para cuando quieras guardar las transacciones.
+    """
+    service = get_sheets_service()
+    spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+    if not spreadsheet_id:
+        raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} environment variable not set")
 
+    body = {"values": values}
+
+    try:
+        service.spreadsheets().values().append(
+            spreadsheetId=spreadsheet_id,
+            range=range_name,
+            valueInputOption="USER_ENTERED",
+            insertDataOption="INSERT_ROWS",
+            body=body,
+        ).execute()
+    except Exception as e:
+        logger.exception("Error appending transactions to Google Sheets")
+        raise e
