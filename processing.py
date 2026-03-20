@@ -12,7 +12,6 @@ log = setup_logging("expense_tracker_processing")
 
 def _normalize_amount(amount_str: str) -> float | None:
     try:
-        # Reemplaza comas por puntos y limpia espacios
         value = amount_str.replace(",", ".").strip()
         return float(value)
     except Exception:
@@ -72,24 +71,24 @@ def process_user_input(prompt: str) -> Dict[str, Any]:
     """
     log.debug(f"Processing user input: {prompt}")
 
-    system_instruction = """
+    full_prompt = f"""
 You are an AI that extracts structured transaction data from natural language.
+
 Return a JSON object with the following keys:
 - date (string, e.g. '2024-01-31')
 - amount (number)
-- type (one of: {tx_types})
-- category (one of: {categories})
+- type (one of: {", ".join(TRANSACTION_TYPES)})
+- category (one of: {", ".join(CATEGORIES)})
 - subcategory (string)
 - description (string, short human-readable summary)
+
 If something is missing, make a reasonable guess.
-""".format(
-        tx_types=", ".join(TRANSACTION_TYPES),
-        categories=", ".join(CATEGORIES),
-    )
+
+User input: {prompt}
+"""
 
     model_response = generate_text(
-        prompt=prompt,
-        system_instruction=system_instruction,
+        full_prompt,
         json_mode=True,
     )
 
