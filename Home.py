@@ -1062,33 +1062,31 @@ def main():
             st.session_state.sheets_verified = True
         
         st.title("Chetti Accounting ❤️")
-        st.markdown(f"📊 [View Google Sheet]({get_sheet_url()})")
+        st.sidebar.markdown(f"[📊 View Google Sheet]({get_sheet_url()})")
         st.divider()
         
         init_session_state()
         
-        # Display chat history
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-        
         # Handle chat input
-        if prompt := st.chat_input("Tell me about your income or expense..."):
+        if prompt := st.chat_input("What's the transaction?"):
             log.debug(f"Received user input: {prompt}")
             st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
-            
+
             # Process user input only if we don't have a current transaction
             if not st.session_state.current_transaction:
                 extracted_info = process_user_input(prompt)
                 st.session_state.current_transaction = extracted_info
                 st.rerun()
-            
+
+        # Display chat history
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
         # Show transaction form if we have extracted info
         if st.session_state.current_transaction:
             show_transaction_form()
-    
+
     except Exception as e:
         log.error(f"❌ Application error: {str(e)}", exc_info=True)
         st.error(str(e) if str(e) else "An unexpected error occurred. Please try again later.")
