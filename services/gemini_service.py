@@ -13,7 +13,7 @@ def get_gemini_client() -> Any:
     client = genai.Client(api_key=api_key)
     return client
 
-MODEL = 'gemini-2.0-flash'
+MODEL = 'gemini-2.5-flash'
 
 def generate_text(prompt: str) -> str:
     """Generate text using Gemini AI"""
