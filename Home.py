@@ -1061,7 +1061,7 @@ def main():
             verify_sheets_setup()
             st.session_state.sheets_verified = True
         
-        st.title("💰 Smart Finance Tracker")
+        st.title("Chetti Accounting ❤️")
         st.markdown(f"📊 [View Google Sheet]({get_sheet_url()})")
         st.divider()
         
