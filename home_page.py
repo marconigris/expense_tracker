@@ -5,10 +5,7 @@ import datetime as dt
 import streamlit as st
 
 from utils.logging_utils import setup_logging
-from state import (
-    get_messages,
-    add_message,
-)
+from state import get_messages, add_message
 from bootstrap import ensure_startup, render_global_header
 from services.google_sheets import append_transactions
 
@@ -56,14 +53,18 @@ def _save_expense(amount: float, description: str, currency: str) -> None:
     try:
         today = dt.date.today().isoformat()
         values = [[today, amount, currency, description]]
+        
+        log.info(f"Saving expense - Date: {today}, Amount: {amount}, Currency: {currency}, Description: {description}")
+        
         append_transactions("Expenses", values)
         
         msg = f"✅ Expense saved: {currency} {amount} - {description}"
+        log.info(f"Successfully saved expense: {msg}")
         add_message("assistant", msg)
         st.success(msg)
     except Exception as e:
-        log.error(f"Failed to save expense: {e}")
-        st.error("Failed to save expense. Please try again.")
+        log.error(f"Failed to save expense: {e}", exc_info=True)
+        st.error(f"Failed to save expense: {str(e)}")
 
 
 def render_messages_log() -> None:
