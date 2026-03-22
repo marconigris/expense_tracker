@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+import datetime as dt
 
 import streamlit as st
 
@@ -8,11 +8,7 @@ from utils.logging_utils import setup_logging
 from state import (
     get_messages,
     add_message,
-    clear_current_transaction,
-    get_current_transaction,
-    set_current_transaction,
 )
-from processing import process_user_input
 from bootstrap import ensure_startup, render_global_header
 from services.google_sheets import append_transactions
 
@@ -21,115 +17,80 @@ log = setup_logging("expense_tracker_home")
 
 # ---------- UI HELPERS ----------
 
-def render_input_box() -> tuple[bool, str]:
-    with st.form(key="input_form", clear_on_submit=True):
-        col1, col2 = st.columns([8, 1])
-        with col1:
-            prompt = st.text_input(
-                label="transaction_input",
-                placeholder="Describe your transaction (e.g. Yesterday I spent 50 on groceries)",
-                label_visibility="collapsed",
-            )
-        with col2:
-            submitted = st.form_submit_button("➤", use_container_width=True)
-    return submitted, prompt
-
-
-def render_confirmation_box(tx: dict[str, Any] | None) -> None:
-    if not tx:
-        return
-
-    with st.expander("Confirm transaction", expanded=True):
-        st.write(f"Date: {tx.get('date')}")
-        st.write(f"Amount: {tx.get('amount')}")
-        st.write(f"Type: {tx.get('type')}")
-        st.write(f"Category: {tx.get('category')}")
-        st.write(f"Subcategory: {tx.get('subcategory')}")
-        st.write(f"Description: {tx.get('description')}")
-
-        st.markdown("---")
+def render_add_expense_form() -> None:
+    """Render the form to add a new expense."""
+    st.subheader("Add Expense")
+    
+    with st.form(key="add_expense_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
-
+        
         with col1:
-            confirm = st.button("✅ Confirm & Save", key="confirm_save", use_container_width=True)
+            amount = st.number_input(
+                "Amount",
+                min_value=0.0,
+                step=0.01,
+                format="%.2f"
+            )
+        
         with col2:
-            cancel = st.button("❌ Cancel", key="cancel_tx", use_container_width=True)
+            currency = st.selectbox(
+                "Currency",
+                ["USD", "EUR", "GBP", "ARS", "MXN", "BRL"],
+                index=0
+            )
+        
+        description = st.text_input(
+            "Description",
+            placeholder="e.g., Groceries, Gas, Coffee"
+        )
+        
+        submitted = st.form_submit_button("✅ Add Expense", use_container_width=True)
+        
+        if submitted:
+            if amount > 0 and description:
+                _save_expense(amount, description, currency)
+            elif amount == 0:
+                st.error("Please enter an amount greater than 0")
+            else:
+                st.error("Please enter a description")
 
-        if confirm:
-            _save_transaction_to_sheet(tx)
-        if cancel:
-            clear_current_transaction()
-            add_message("assistant", "Okay, I discarded this transaction.")
 
-
-def render_messages_log() -> None:
-    st.subheader("Log")
-    for message in get_messages():
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-
-# ---------- CONTROLLER ----------
-
-def _save_transaction_to_sheet(tx: dict[str, Any]) -> None:
-    """
-    Save the confirmed transaction to Google Sheets.
-    """
+def _save_expense(amount: float, description: str, currency: str) -> None:
+    """Save expense to Google Sheets."""
     try:
-        # Simple convention: use the "Expenses" sheet and let Sheets find next row.
-        values = [[
-            tx.get("date"),
-            tx.get("amount"),
-            tx.get("type"),
-            tx.get("category"),
-            tx.get("subcategory"),
-            tx.get("description"),
-        ]]
+        today = dt.date.today().isoformat()
+        values = [[today, amount, currency, description]]
         append_transactions("Expenses", values)
-        clear_current_transaction()
-
-        msg = "Transaction saved to Google Sheets ✅"
+        
+        msg = f"✅ Expense saved: {currency} {amount} - {description}"
         add_message("assistant", msg)
         st.success(msg)
     except Exception as e:
-        log.error(f"Failed to save transaction: {e}")
-        st.error("Failed to save transaction. Please try again.")
+        log.error(f"Failed to save expense: {e}")
+        st.error("Failed to save expense. Please try again.")
 
 
-def handle_new_prompt(prompt: str) -> None:
-    if not prompt:
+def render_messages_log() -> None:
+    """Render the activity log."""
+    st.subheader("Activity Log")
+    messages = get_messages()
+    if not messages:
+        st.info("No activity yet")
         return
-
-    # reset state for new transaction
-    st.session_state.messages = []
-    clear_current_transaction()
-
-    log.debug(f"Received user input: {prompt}")
-    add_message("user", prompt)
-
-    extracted_info = process_user_input(prompt)
-    set_current_transaction(extracted_info)
-
-    add_message("assistant", "I processed your transaction, please review the confirmation box 👇")
+    
+    for message in messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
 
 # ---------- PUBLIC ENTRYPOINT ----------
 
 def render() -> None:
     """
-    Render Home screen:
-    - input
-    - confirmation
-    - messages
-    - log
+    Render Home screen with expense form and activity log.
     """
     ensure_startup()
     render_global_header()
 
-    submitted, prompt = render_input_box()
-
-    if submitted and prompt:
-        handle_new_prompt(prompt)
-
-    render_confirmation_box(get_current_transaction())
+    render_add_expense_form()
     render_messages_log()
