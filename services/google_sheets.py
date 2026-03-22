@@ -148,10 +148,10 @@ def verify_sheets_setup() -> None:
             ).execute()
         
         # Set headers for full format (for dashboard compatibility)
-        headers = [['Date', 'Amount', 'Type', 'Category', 'Subcategory', 'Description', 'Currency Amount', 'Currency']]
+        headers = [['Date', 'Amount', 'Type', 'Category', 'Subcategory', 'Description', 'Currency Amount', 'Currency', 'User']]
         result = service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
-            range='Expenses!A1:H1'
+            range='Expenses!A1:I1'
         ).execute()
         
         current_headers = result.get('values', [])
@@ -161,7 +161,7 @@ def verify_sheets_setup() -> None:
             logger.info("Setting up Expenses sheet headers...")
             service.spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id,
-                range='Expenses!A1:H1',
+                range='Expenses!A1:I1',
                 valueInputOption='RAW',
                 body={'values': headers}
             ).execute()
@@ -209,7 +209,7 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
     
     # Ensure range_name specifies just the columns, not rows (let Google Sheets find next empty row)
     if "!" not in range_name:
-        range_name = f"{range_name}!A:H"  # Columns A-H for full schema
+        range_name = f"{range_name}!A:I"  # Columns A-I for full schema with User
 
     try:
         logger.info(f"Appending transactions to range: {range_name}")

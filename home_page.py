@@ -38,18 +38,26 @@ def render_add_expense_form() -> None:
             horizontal=True
         )
         
+        user = st.text_input(
+            "Your Name",
+            placeholder="e.g., Marco, Juan",
+            key="expense_user"
+        )
+        
         submitted = st.form_submit_button("✅ Add Expense", use_container_width=True)
         
         if submitted:
-            if amount > 0 and description:
-                _save_expense(amount, description, currency)
+            if amount > 0 and description and user:
+                _save_expense(amount, description, currency, user)
             elif amount == 0:
                 st.error("Please enter an amount greater than 0")
-            else:
+            elif not description:
                 st.error("Please enter a description")
+            else:
+                st.error("Please enter your name")
 
 
-def _save_expense(amount: float, description: str, currency: str) -> None:
+def _save_expense(amount: float, description: str, currency: str, user: str) -> None:
     """Save expense to Google Sheets with currency conversion."""
     try:
         today = dt.date.today().isoformat()
@@ -57,7 +65,7 @@ def _save_expense(amount: float, description: str, currency: str) -> None:
         # Convert the input amount to USD
         usd_amount = convert_to_usd(amount, currency)
         
-        # Full row: Date, Amount (USD), Type, Category, Subcategory, Description, Currency Amount, Currency
+        # Full row: Date, Amount (USD), Type, Category, Subcategory, Description, Currency Amount, Currency, User
         # Type, Category, Subcategory are defaults since simplified form doesn't include them
         values = [[
             today,                          # Date
@@ -67,17 +75,18 @@ def _save_expense(amount: float, description: str, currency: str) -> None:
             "Miscellaneous",              # Subcategory (default)
             description,                   # Description
             amount,                        # Currency Amount (original input)
-            currency                       # Currency
+            currency,                      # Currency
+            user                           # User
         ]]
         
         log.info(
             f"Saving expense - Date: {today}, Amount: {amount} {currency} "
-            f"(${usd_amount:.2f} USD), Description: {description}"
+            f"(${usd_amount:.2f} USD), Description: {description}, User: {user}"
         )
         
         append_transactions("Expenses", values)
         
-        msg = f"✅ Expense saved: {currency} {amount} (${usd_amount:.2f} USD) - {description}"
+        msg = f"✅ Expense saved by {user}: {currency} {amount} (${usd_amount:.2f} USD) - {description}"
         log.info(f"Successfully saved expense: {msg}")
         add_message("assistant", msg)
         st.success(msg)
