@@ -16,6 +16,67 @@ log = setup_logging("expense_tracker_home")
 
 # ---------- UI HELPERS ----------
 
+def _render_currency_selector() -> str:
+    """Render a tap-friendly currency selector styled as square tiles."""
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stRadio"] > div[role="radiogroup"] {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.75rem;
+        }
+
+        div[data-testid="stRadio"] > div[role="radiogroup"] > label {
+            margin: 0;
+            min-height: 92px;
+            border: 1px solid rgba(49, 51, 63, 0.2);
+            border-radius: 0.9rem;
+            background: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        div[data-testid="stRadio"] > div[role="radiogroup"] > label:hover {
+            border-color: #2563eb;
+            background: #eff6ff;
+        }
+
+        div[data-testid="stRadio"] > div[role="radiogroup"] > label:has(input:checked) {
+            border-color: #2563eb;
+            background: #dbeafe;
+            box-shadow: inset 0 0 0 1px #2563eb;
+        }
+
+        div[data-testid="stRadio"] > div[role="radiogroup"] > label > div {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        div[data-testid="stRadio"] p {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    return st.radio(
+        "Currency",
+        ["USD", "EUR", "DOP"],
+        horizontal=True,
+        key="expense_currency",
+    )
+
+
 def render_add_expense_form() -> None:
     """Render the form to add a new expense."""
     st.subheader("Add Expense")
@@ -37,11 +98,7 @@ def render_add_expense_form() -> None:
             )
         
         with col2:
-            currency = st.selectbox(
-                "Currency",
-                ["USD", "EUR", "DOP"],
-                label_visibility="visible"
-            )
+            currency = _render_currency_selector()
         
         # Row 1: Description (1,0) and (1,1) - spans both columns
         description = st.text_input(
