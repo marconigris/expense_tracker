@@ -24,6 +24,20 @@ USER_DISPLAY_NAMES = {
     "monigila": "Moni",
 }
 
+
+def build_settlement_message(user_balances: dict[str, float]) -> str:
+    marco_total = user_balances["Marco"]
+    moni_total = user_balances["Moni"]
+    difference = abs(marco_total - moni_total) / 2
+
+    if difference < 0.01:
+        return "Marco and Moni are settled up"
+
+    if marco_total > moni_total:
+        return f"Moni owes Marco {format_currency(difference)}"
+
+    return f"Marco owes Moni {format_currency(difference)}"
+
 # Load environment variables
 load_dotenv()
 
@@ -267,15 +281,17 @@ def show_overview_analytics(df, start_date, end_date):
         USER_DISPLAY_NAMES['marconigris']: expense_df[normalized_users == 'marconigris']['Amount'].sum(),
         USER_DISPLAY_NAMES['monigila']: expense_df[normalized_users == 'monigila']['Amount'].sum(),
     }
+    settlement_message = build_settlement_message(user_balances)
     
     # Display key metrics
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
-        st.metric("Total Expenses", format_currency(total_expense), delta=None)
-    with col2:
         st.metric("Marco", format_currency(user_balances['Marco']), delta=None)
-    with col3:
+    with col2:
         st.metric("Moni", format_currency(user_balances['Moni']), delta=None)
+
+    st.metric("Total Expenses", format_currency(total_expense), delta=None)
+    st.caption(settlement_message)
     
     # Monthly Summary
     st.subheader("Monthly Summary")
