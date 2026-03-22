@@ -19,28 +19,15 @@ def render_sidebar_navigation() -> None:
 
     st.sidebar.markdown("### Projects")
     for project_name in PROJECTS:
-        is_active_project = current_project == project_name
-        st.sidebar.markdown(f"**{project_name}**")
-
-        add_expense_type = "primary" if is_active_project else "secondary"
+        button_type = "primary" if current_project == project_name else "secondary"
         if st.sidebar.button(
-            "Add Expense",
-            key=f"nav_add_expense_{project_name}",
+            project_name,
+            key=f"nav_project_{project_name}",
             use_container_width=True,
-            type=add_expense_type,
+            type=button_type,
         ):
             set_current_project(project_name)
             st.switch_page("Home.py")
-
-        if st.sidebar.button(
-            "Dashboard",
-            key=f"nav_dashboard_{project_name}",
-            use_container_width=True,
-        ):
-            set_current_project(project_name)
-            st.switch_page("pages/📊_Dashboard.py")
-
-        st.sidebar.markdown("")
 
 
 def ensure_startup() -> bool:
@@ -102,3 +89,20 @@ def render_global_header() -> None:
     sheet_url = get_main_sheet_url()
     if sheet_url:
         st.sidebar.markdown(f"[📊 View Google Sheet]({sheet_url})")
+
+
+def render_top_view_navigation(active_view: str) -> None:
+    """Render the top-level page switcher between Expense and Balances."""
+    selected_view = st.segmented_control(
+        "View",
+        ["Expense", "Balances"],
+        selection_mode="single",
+        default=active_view,
+        key=f"top_view_navigation_{active_view.lower()}",
+        label_visibility="collapsed",
+    )
+
+    if selected_view == "Balances" and active_view != "Balances":
+        st.switch_page("pages/📊_Dashboard.py")
+    elif selected_view == "Expense" and active_view != "Expense":
+        st.switch_page("Home.py")

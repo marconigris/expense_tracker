@@ -9,7 +9,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build # type: ignore
 from dotenv import load_dotenv
 from utils.logging_utils import setup_logging
-from bootstrap import ensure_startup
+from bootstrap import ensure_startup, render_top_view_navigation
 from state import get_current_project
 from services.google_sheets import verify_sheets_setup
 
@@ -241,7 +241,6 @@ except Exception:
     st.error("Failed to connect to Google Sheets. Please check your credentials.")
     sys.exit(1)
 
-@st.cache_data(ttl=300)  # Cache for 5 minutes
 def get_transactions_data(project_name: str):
     try:
         log.debug("Fetching transactions data from Google Sheets")
@@ -428,7 +427,6 @@ def filter_dataframe(df, start_date, end_date):
     return df[(df['Date'] >= start_date) & (df['Date'] <= end_date)]
 
 def show_overview_analytics(df, start_date, end_date):
-    st.subheader("📈 Expense Overview")
     if df.empty:
         st.info("No transactions found for the selected period.")
         return
@@ -681,11 +679,15 @@ def show_analytics():
         if not ensure_startup():
             return
 
+        project_name = get_current_project()
+        st.title(f"{project_name} Dashboard")
+        render_top_view_navigation("Balances")
+
         # Get date filters once for all tabs
         start_date, end_date = get_date_filters(key="global_analytics_filter")
         
         # Get and filter data
-        df = get_transactions_data(get_current_project())
+        df = get_transactions_data(project_name)
         if not df.empty:
             df = df.copy()
             df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')

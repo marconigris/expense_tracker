@@ -5,7 +5,7 @@ import datetime as dt
 import streamlit as st
 
 from utils.logging_utils import setup_logging
-from bootstrap import ensure_startup, render_global_header
+from bootstrap import ensure_startup, render_global_header, render_top_view_navigation
 from services.google_sheets import append_transactions
 from services.auth_service import get_authenticated_username
 from config.exchange_rates import convert_to_usd
@@ -412,4 +412,5 @@ def render() -> None:
         return  # Stop rendering if not authenticated
     
     render_global_header()
+    render_top_view_navigation("Expense")
     render_add_expense_form()
