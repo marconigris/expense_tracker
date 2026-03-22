@@ -5,11 +5,11 @@ import datetime as dt
 import streamlit as st
 
 from utils.logging_utils import setup_logging
-from bootstrap import ensure_startup, render_global_header, render_top_view_navigation
+from bootstrap import ensure_startup, render_global_header, render_top_view_navigation, render_project_balance_banner
 from services.google_sheets import append_transactions
 from services.auth_service import get_authenticated_username
-from config.exchange_rates import convert_to_usd
-from config.constants import CATEGORIES, PROJECTS
+from config.exchange_rates import convert_currency
+from config.constants import CATEGORIES, PROJECTS, is_personal_project
 from state import get_current_project
 
 log = setup_logging("expense_tracker_home")
@@ -22,8 +22,8 @@ USER_DISPLAY_NAMES = {
 EXPENSE_AMOUNT_KEY = "expense_amount"
 EXPENSE_DESCRIPTION_KEY = "expense_description"
 EXPENSE_CATEGORY_KEY = "expense_category"
+TRANSACTION_TYPE_KEY = "transaction_type"
 EXPENSE_CURRENCY_KEY = "expense_currency"
-SHARED_EXPENSE_KEY = "shared_expense"
 SPLIT_MARCO_AMOUNT_KEY = "split_marco_amount"
 SPLIT_MONI_AMOUNT_KEY = "split_moni_amount"
 LAST_SPLIT_EDITED_KEY = "last_split_edited"
@@ -46,11 +46,12 @@ def _render_currency_selector(label_visibility: str = "visible") -> str:
 
 
 def _initialize_expense_state(username: str, project_name: str) -> None:
+    default_type = "Expense"
     st.session_state.setdefault(EXPENSE_AMOUNT_KEY, None)
     st.session_state.setdefault(EXPENSE_DESCRIPTION_KEY, "")
-    st.session_state.setdefault(EXPENSE_CATEGORY_KEY, list(CATEGORIES["Expense"].keys())[0])
+    st.session_state.setdefault(TRANSACTION_TYPE_KEY, default_type)
+    st.session_state.setdefault(EXPENSE_CATEGORY_KEY, list(CATEGORIES[default_type].keys())[0])
     st.session_state.setdefault(EXPENSE_CURRENCY_KEY, PROJECTS[project_name]["default_currency"])
-    st.session_state.setdefault(SHARED_EXPENSE_KEY, False)
     st.session_state.setdefault(SPLIT_MARCO_AMOUNT_KEY, 0.0)
     st.session_state.setdefault(SPLIT_MONI_AMOUNT_KEY, 0.0)
     st.session_state.setdefault(LAST_SPLIT_EDITED_KEY, "")
@@ -59,22 +60,20 @@ def _initialize_expense_state(username: str, project_name: str) -> None:
     last_project = st.session_state.get(LAST_PROJECT_KEY)
     if last_project != project_name:
         st.session_state[EXPENSE_CURRENCY_KEY] = PROJECTS[project_name]["default_currency"]
+        st.session_state[TRANSACTION_TYPE_KEY] = "Expense"
+        st.session_state[EXPENSE_CATEGORY_KEY] = list(CATEGORIES["Expense"].keys())[0]
         st.session_state[LAST_PROJECT_KEY] = project_name
     _set_default_split_amounts(username, preserve_manual=False)
 
 
 def _set_default_split_amounts(username: str, preserve_manual: bool = True) -> None:
     amount = float(st.session_state.get(EXPENSE_AMOUNT_KEY) or 0.0)
-    if preserve_manual and st.session_state.get(SHARED_EXPENSE_KEY):
+    if preserve_manual and st.session_state.get(LAST_SPLIT_EDITED_KEY):
         _sync_split_amounts(st.session_state.get(LAST_SPLIT_EDITED_KEY) or "marco")
         return
 
     normalized_user = username.strip().lower() if username else ""
-    if st.session_state.get(SHARED_EXPENSE_KEY):
-        st.session_state[SPLIT_MARCO_AMOUNT_KEY] = round(amount / 2, 2)
-        st.session_state[SPLIT_MONI_AMOUNT_KEY] = round(amount - st.session_state[SPLIT_MARCO_AMOUNT_KEY], 2)
-        st.session_state[LAST_SPLIT_EDITED_KEY] = "marco"
-    elif normalized_user == "marconigris":
+    if normalized_user == "marconigris":
         st.session_state[SPLIT_MARCO_AMOUNT_KEY] = round(amount, 2)
         st.session_state[SPLIT_MONI_AMOUNT_KEY] = 0.0
         st.session_state[LAST_SPLIT_EDITED_KEY] = "marco"
@@ -83,9 +82,9 @@ def _set_default_split_amounts(username: str, preserve_manual: bool = True) -> N
         st.session_state[SPLIT_MONI_AMOUNT_KEY] = round(amount, 2)
         st.session_state[LAST_SPLIT_EDITED_KEY] = "moni"
     else:
-        st.session_state[SPLIT_MARCO_AMOUNT_KEY] = 0.0
+        st.session_state[SPLIT_MARCO_AMOUNT_KEY] = round(amount, 2)
         st.session_state[SPLIT_MONI_AMOUNT_KEY] = 0.0
-        st.session_state[LAST_SPLIT_EDITED_KEY] = ""
+        st.session_state[LAST_SPLIT_EDITED_KEY] = "marco"
 
 
 def _sync_split_amounts(edited_field: str) -> None:
@@ -119,21 +118,10 @@ def _handle_moni_split_change() -> None:
     _sync_split_amounts("moni")
 
 
-def _handle_shared_toggle(username: str) -> None:
-    _set_default_split_amounts(username, preserve_manual=False)
-
-
 def _get_split_percentages(username: str) -> tuple[int, int]:
     amount = float(st.session_state.get(EXPENSE_AMOUNT_KEY) or 0.0)
     if amount <= 0:
         return (0, 0)
-
-    if not st.session_state.get(SHARED_EXPENSE_KEY):
-        normalized_user = username.strip().lower() if username else ""
-        if normalized_user == "marconigris":
-            return (100, 0)
-        if normalized_user == "monigila":
-            return (0, 100)
 
     marco_amount = float(st.session_state.get(SPLIT_MARCO_AMOUNT_KEY) or 0.0)
     marco_share = round((marco_amount / amount) * 100)
@@ -146,14 +134,22 @@ def _reset_expense_form(username: str) -> None:
     st.session_state[RESET_EXPENSE_FORM_KEY] = True
 
 
+def _handle_transaction_type_change() -> None:
+    transaction_type = st.session_state.get(TRANSACTION_TYPE_KEY, "Expense")
+    categories = list(CATEGORIES.get(transaction_type, CATEGORIES["Expense"]).keys())
+    if categories:
+        st.session_state[EXPENSE_CATEGORY_KEY] = categories[0]
+
+
 def _apply_pending_reset(username: str, project_name: str) -> None:
     if not st.session_state.get(RESET_EXPENSE_FORM_KEY):
         return
 
     st.session_state[EXPENSE_AMOUNT_KEY] = None
     st.session_state[EXPENSE_DESCRIPTION_KEY] = ""
-    st.session_state[SHARED_EXPENSE_KEY] = False
     st.session_state[EXPENSE_CURRENCY_KEY] = PROJECTS[project_name]["default_currency"]
+    st.session_state[TRANSACTION_TYPE_KEY] = "Expense"
+    st.session_state[EXPENSE_CATEGORY_KEY] = list(CATEGORIES["Expense"].keys())[0]
     st.session_state[RESET_EXPENSE_FORM_KEY] = False
     _set_default_split_amounts(username, preserve_manual=False)
 
@@ -176,8 +172,7 @@ def _render_mobile_form_styles() -> None:
         div[data-testid="stNumberInput"],
         div[data-testid="stTextInput"],
         div[data-testid="stSelectbox"],
-        div[data-testid="stSegmentedControl"],
-        div[data-testid="stCheckbox"] {
+        div[data-testid="stSegmentedControl"] {
             padding-top: 0.25rem;
         }
 
@@ -224,6 +219,14 @@ def _render_mobile_form_styles() -> None:
         }
 
         @media (max-width: 640px) {
+            div[data-testid="stHorizontalBlock"] {
+                gap: 0.75rem;
+            }
+
+            div[data-testid="stHorizontalBlock"] > div {
+                min-width: 0;
+            }
+
             div[data-testid="stSegmentedControl"] button {
                 min-height: 2.75rem;
             }
@@ -250,18 +253,32 @@ def render_add_expense_form() -> None:
     # Get username from authenticated session
     username = get_authenticated_username()
     current_project = get_current_project()
-    expense_categories = CATEGORIES["Expense"]
+    personal_project = is_personal_project(current_project)
     _initialize_expense_state(username, current_project)
     _apply_pending_reset(username, current_project)
+
+    if personal_project:
+        st.segmented_control(
+            "Type",
+            ["Expense", "Income"],
+            selection_mode="single",
+            key=TRANSACTION_TYPE_KEY,
+            on_change=_handle_transaction_type_change,
+        )
+    else:
+        st.session_state[TRANSACTION_TYPE_KEY] = "Expense"
+
+    transaction_type = st.session_state.get(TRANSACTION_TYPE_KEY, "Expense")
+    expense_categories = CATEGORIES[transaction_type]
 
     if st.session_state.get(EXPENSE_SUCCESS_MESSAGE_KEY):
         st.success(st.session_state[EXPENSE_SUCCESS_MESSAGE_KEY])
         st.session_state[EXPENSE_SUCCESS_MESSAGE_KEY] = ""
     
-    col1, col2 = st.columns([0.95, 1.05], gap="small")
-    
-    with col1:
-        st.caption("Amount")
+    project_currency = PROJECTS[current_project]["default_currency"]
+
+    if personal_project:
+        st.caption(f"Amount ({project_currency})")
         amount = st.number_input(
             "Amount",
             min_value=0.0,
@@ -274,10 +291,28 @@ def render_add_expense_form() -> None:
             args=(username,),
             label_visibility="collapsed",
         )
+        currency = project_currency
+    else:
+        col1, col2 = st.columns([0.95, 1.05], gap="small")
+        
+        with col1:
+            st.caption("Amount")
+            amount = st.number_input(
+                "Amount",
+                min_value=0.0,
+                value=st.session_state[EXPENSE_AMOUNT_KEY],
+                step=0.01,
+                format="%.2f",
+                placeholder="Enter amount",
+                key=EXPENSE_AMOUNT_KEY,
+                on_change=_handle_total_amount_change,
+                args=(username,),
+                label_visibility="collapsed",
+            )
 
-    with col2:
-        st.caption("Currency")
-        currency = _render_currency_selector(label_visibility="collapsed")
+        with col2:
+            st.caption("Currency")
+            currency = _render_currency_selector(label_visibility="collapsed")
 
     st.selectbox(
         "Category",
@@ -291,18 +326,12 @@ def render_add_expense_form() -> None:
         key=EXPENSE_DESCRIPTION_KEY,
     )
 
-    with st.expander("Split details (optional)", expanded=False):
-        st.checkbox(
-            "Shared expense",
-            key=SHARED_EXPENSE_KEY,
-            on_change=_handle_shared_toggle,
-            args=(username,),
-        )
-        if st.session_state[SHARED_EXPENSE_KEY]:
-            split_col1, split_col2 = st.columns(2, gap="medium")
+    if not personal_project:
+        with st.expander("Split payment", expanded=False):
+            split_col1, split_col2 = st.columns(2, gap="small")
             with split_col1:
                 st.number_input(
-                    "Marco amount",
+                    "Marco paid",
                     min_value=0.0,
                     step=0.01,
                     format="%.2f",
@@ -311,7 +340,7 @@ def render_add_expense_form() -> None:
                 )
             with split_col2:
                 st.number_input(
-                    "Moni amount",
+                    "Moni paid",
                     min_value=0.0,
                     step=0.01,
                     format="%.2f",
@@ -319,14 +348,19 @@ def render_add_expense_form() -> None:
                     on_change=_handle_moni_split_change,
                 )
 
-    if st.button("✅ Add Expense", use_container_width=True):
-        marco_share, moni_share = _get_split_percentages(username)
+    action_label = "✅ Add Transaction" if personal_project else "✅ Add Expense"
+    if st.button(action_label, width="stretch"):
+        if personal_project:
+            marco_share, moni_share = (100, 0) if username == "marconigris" else (0, 100)
+        else:
+            marco_share, moni_share = _get_split_percentages(username)
 
         if amount and amount > 0 and description and username:
             _save_expense(
                 amount,
                 description,
                 currency,
+                transaction_type,
                 st.session_state[EXPENSE_CATEGORY_KEY],
                 current_project,
                 username,
@@ -351,6 +385,7 @@ def _save_expense(
     amount: float,
     description: str,
     currency: str,
+    transaction_type: str,
     category: str,
     project_name: str,
     user: str,
@@ -361,13 +396,13 @@ def _save_expense(
     try:
         today = dt.date.today().isoformat()
         
-        # Convert the input amount to USD
-        usd_amount = convert_to_usd(amount, currency)
+        project_currency = PROJECTS[project_name]["default_currency"]
+        project_amount = convert_currency(amount, currency, project_currency)
         
         values = [[
             today,                          # Date
-            round(usd_amount, 2),          # Amount (converted to USD)
-            "Expense",                     # Type (default)
+            round(project_amount, 2),      # Amount (stored in project default currency)
+            transaction_type,              # Type
             category,                      # Category
             description,                   # Description
             amount,                        # Currency Amount (original input)
@@ -378,15 +413,17 @@ def _save_expense(
         ]]
         
         log.info(
-            f"Saving expense - Date: {today}, Amount: {amount} {currency} "
-            f"(${usd_amount:.2f} USD), Description: {description}, User: {user}"
+            f"Saving transaction - Date: {today}, Type: {transaction_type}, Amount: {amount} {currency} "
+            f"({project_amount:.2f} {project_currency}), Description: {description}, User: {user}"
         )
         
         append_transactions(project_name, values)
         
-        split_note = f" Split: Marco {marco_share}% / Moni {moni_share}%." if (marco_share, moni_share) not in {(100, 0), (0, 100)} else ""
-        msg = f"✅ Saved {category}: {currency} {amount:.2f} ({format_usd(usd_amount)}).{split_note}"
-        log.info(f"Successfully saved expense: {msg}")
+        split_note = ""
+        if not is_personal_project(project_name) and (marco_share, moni_share) not in {(100, 0), (0, 100)}:
+            split_note = f" Payment: Marco {marco_share}% / Moni {moni_share}%."
+        msg = f"✅ Saved {transaction_type.lower()} in {category}: {currency} {amount:.2f} ({project_currency} {project_amount:.2f}).{split_note}"
+        log.info(f"Successfully saved transaction: {msg}")
         st.session_state[EXPENSE_SUCCESS_MESSAGE_KEY] = msg
     except ValueError as e:
         log.error(f"Currency conversion error: {e}")
@@ -394,12 +431,6 @@ def _save_expense(
     except Exception as e:
         log.error(f"Failed to save expense: {e}", exc_info=True)
         st.error(f"Failed to save expense: {str(e)}")
-
-
-def format_usd(amount: float) -> str:
-    return f"${amount:.2f} USD"
-
-
 # ---------- PUBLIC ENTRYPOINT ----------
 
 def render() -> None:
@@ -412,5 +443,9 @@ def render() -> None:
         return  # Stop rendering if not authenticated
     
     render_global_header()
-    render_top_view_navigation("Expense")
+    current_project = get_current_project()
+    if is_personal_project(current_project):
+        render_project_balance_banner(current_project)
+    else:
+        render_top_view_navigation("Expense")
     render_add_expense_form()

@@ -11,6 +11,7 @@ MESSAGES_KEY = "messages"
 CURRENT_TRANSACTION_KEY = "current_transaction"
 SHEETS_VERIFIED_KEY = "sheets_verified"
 CURRENT_PROJECT_KEY = "current_project"
+LOGOUT_KEY = "logout"
 
 
 # ---------- INIT ----------
@@ -28,6 +29,9 @@ def init_session_state() -> None:
 
     if CURRENT_PROJECT_KEY not in st.session_state:
         st.session_state[CURRENT_PROJECT_KEY] = DEFAULT_PROJECT
+
+    if LOGOUT_KEY not in st.session_state:
+        st.session_state[LOGOUT_KEY] = False
 
 
 # ---------- MESSAGES HELPERS ----------

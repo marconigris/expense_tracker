@@ -9,17 +9,33 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build # type: ignore
 from dotenv import load_dotenv
 from utils.logging_utils import setup_logging
-from bootstrap import ensure_startup, render_global_header, render_top_view_navigation
+from bootstrap import ensure_startup, render_global_header, render_top_view_navigation, render_project_balance_banner
 from state import get_current_project
 from services.google_sheets import verify_sheets_setup
+from config.constants import PROJECTS, is_personal_project
+from config.exchange_rates import convert_currency
 
 log = setup_logging("expense_tracker_analytics")
 
 st.set_page_config (layout='wide')
 
 
-def format_currency(amount: float) -> str:
-    return f"${amount:,.2f}"
+def get_project_currency(project_name: str | None = None) -> str:
+    active_project = project_name or get_current_project()
+    return PROJECTS.get(active_project, PROJECTS["Cabarete"])["default_currency"]
+
+
+def get_currency_symbol(currency: str) -> str:
+    return {
+        "USD": "$",
+        "EUR": "€",
+        "DOP": "RD$",
+    }.get(currency, f"{currency} ")
+
+
+def format_currency(amount: float, currency: str | None = None) -> str:
+    active_currency = currency or get_project_currency()
+    return f"{get_currency_symbol(active_currency)}{amount:,.2f}"
 
 
 USER_DISPLAY_NAMES = {
@@ -39,17 +55,18 @@ TRANSACTION_COLUMNS = [
     'Marco Split %',
     'Moni Split %',
 ]
+TRANSACTION_CACHE_KEY = "dashboard_transactions_cache"
 
 
 def format_balance(amount: float) -> str:
     if abs(amount) < 0.01:
-        return "$0.00"
+        return format_currency(0.0)
     if amount > 0:
         return f"+{format_currency(amount)}"
     return f"-{format_currency(abs(amount))}"
 
 
-def calculate_user_balances(expense_df: pd.DataFrame) -> dict[str, float]:
+def calculate_payment_summary(expense_df: pd.DataFrame) -> dict[str, dict[str, float] | str]:
     normalized_users = expense_df['User'].fillna('').str.strip().str.lower()
     marco_share = pd.to_numeric(expense_df['Marco Split %'], errors='coerce').fillna(0.0)
     moni_share = pd.to_numeric(expense_df['Moni Split %'], errors='coerce').fillna(0.0)
@@ -58,14 +75,42 @@ def calculate_user_balances(expense_df: pd.DataFrame) -> dict[str, float]:
     marco_share = marco_share.where(~no_split_data, (normalized_users == 'marconigris').astype(float) * 100)
     moni_share = moni_share.where(~no_split_data, (normalized_users == 'monigila').astype(float) * 100)
 
-    marco_paid = expense_df.loc[normalized_users == 'marconigris', 'Amount'].sum()
-    moni_paid = expense_df.loc[normalized_users == 'monigila', 'Amount'].sum()
-    marco_owed = (expense_df['Amount'] * (marco_share / 100)).sum()
-    moni_owed = (expense_df['Amount'] * (moni_share / 100)).sum()
+    marco_paid = (expense_df['Amount'] * (marco_share / 100)).sum()
+    moni_paid = (expense_df['Amount'] * (moni_share / 100)).sum()
+    equal_share = expense_df['Amount'].sum() / 2
+
+    net_balances = {
+        'Marco': marco_paid - equal_share,
+        'Moni': moni_paid - equal_share,
+    }
+
+    if abs(net_balances['Marco']) < 0.01 and abs(net_balances['Moni']) < 0.01:
+        settlement_message = "Marco and Moni are settled up"
+    elif net_balances['Marco'] > 0 and net_balances['Moni'] < 0:
+        settlement_message = f"Moni owes Marco {format_currency(abs(net_balances['Moni']))}"
+    elif net_balances['Moni'] > 0 and net_balances['Marco'] < 0:
+        settlement_message = f"Marco owes Moni {format_currency(abs(net_balances['Marco']))}"
+    else:
+        settlement_message = "Split data needs review"
 
     return {
-        'Marco': marco_paid - marco_owed,
-        'Moni': moni_paid - moni_owed,
+        'paid_totals': {
+            'Marco': marco_paid,
+            'Moni': moni_paid,
+        },
+        'net_balances': net_balances,
+        'settlement_message': settlement_message,
+    }
+
+
+def calculate_personal_summary(df: pd.DataFrame) -> dict[str, float]:
+    income_total = df[df['Type'] == 'Income']['Amount'].sum()
+    expense_total = df[df['Type'] == 'Expense']['Amount'].sum()
+    net_balance = income_total - expense_total
+    return {
+        'income_total': income_total,
+        'expense_total': expense_total,
+        'net_balance': net_balance,
     }
 
 
@@ -88,8 +133,49 @@ def normalize_transactions_dataframe(values: list[list[str]]) -> pd.DataFrame:
     return df[TRANSACTION_COLUMNS]
 
 
+def normalize_project_amounts(df: pd.DataFrame, project_name: str) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    df = df.copy()
+    project_currency = get_project_currency(project_name)
+
+    def _normalize_row(row: pd.Series) -> float:
+        currency_amount = pd.to_numeric(row.get('Currency Amount'), errors='coerce')
+        source_currency = str(row.get('Currency', '')).strip().upper()
+        stored_amount = pd.to_numeric(row.get('Amount'), errors='coerce')
+
+        if pd.notna(currency_amount) and source_currency:
+            try:
+                return round(convert_currency(float(currency_amount), source_currency, project_currency), 2)
+            except Exception:
+                pass
+
+        return float(stored_amount) if pd.notna(stored_amount) else 0.0
+
+    df['Amount'] = df.apply(_normalize_row, axis=1)
+    return df
+
+
+def _get_cached_transactions(project_name: str) -> pd.DataFrame:
+    cached = st.session_state.get(TRANSACTION_CACHE_KEY, {})
+    cached_rows = cached.get(project_name, [])
+    if not cached_rows:
+        return pd.DataFrame(columns=TRANSACTION_COLUMNS)
+    return pd.DataFrame(cached_rows, columns=TRANSACTION_COLUMNS)
+
+
+def _set_cached_transactions(project_name: str, df: pd.DataFrame) -> None:
+    cached = st.session_state.get(TRANSACTION_CACHE_KEY, {})
+    cached[project_name] = df[TRANSACTION_COLUMNS].fillna("").to_dict("records")
+    st.session_state[TRANSACTION_CACHE_KEY] = cached
+
+
 def parse_sheet_dates(series: pd.Series) -> pd.Series:
     """Parse Google Sheets serial dates and regular date strings."""
+    if pd.api.types.is_datetime64_any_dtype(series):
+        return pd.to_datetime(series, errors='coerce')
+
     numeric_values = pd.to_numeric(series, errors='coerce')
     serial_dates = pd.to_datetime(
         numeric_values,
@@ -102,7 +188,7 @@ def parse_sheet_dates(series: pd.Series) -> pd.Series:
     return serial_dates.fillna(text_dates)
 
 
-def render_overview_cards(user_balances: dict[str, float], total_expense: float, settlement_message: str) -> None:
+def render_overview_cards(user_paid_totals: dict[str, float], total_expense: float, settlement_message: str) -> None:
     st.markdown(
         """
         <style>
@@ -180,11 +266,11 @@ def render_overview_cards(user_balances: dict[str, float], total_expense: float,
             <div class="overview-pair">
                 <div class="overview-card">
                     <div class="overview-label">Marco</div>
-                    <div class="overview-value">{format_balance(user_balances["Marco"])}</div>
+                    <div class="overview-value">{format_currency(user_paid_totals["Marco"])}</div>
                 </div>
                 <div class="overview-card">
                     <div class="overview-label">Moni</div>
-                    <div class="overview-value">{format_balance(user_balances["Moni"])}</div>
+                    <div class="overview-value">{format_currency(user_paid_totals["Moni"])}</div>
                 </div>
             </div>
             <div class="overview-card primary">
@@ -201,20 +287,29 @@ def render_overview_cards(user_balances: dict[str, float], total_expense: float,
     )
 
 
-def build_settlement_message(user_balances: dict[str, float]) -> str:
-    marco_total = user_balances["Marco"]
-    moni_total = user_balances["Moni"]
+def render_personal_overview_cards(income_total: float, expense_total: float, net_balance: float) -> None:
+    st.markdown(
+        f"""
+        <div class="overview-stack">
+            <div class="overview-pair">
+                <div class="overview-card">
+                    <div class="overview-label">Income</div>
+                    <div class="overview-value">{format_currency(income_total)}</div>
+                </div>
+                <div class="overview-card">
+                    <div class="overview-label">Expenses</div>
+                    <div class="overview-value">{format_currency(expense_total)}</div>
+                </div>
+            </div>
+            <div class="overview-card primary">
+                <div class="overview-label">Net Balance</div>
+                <div class="overview-value">{format_balance(net_balance)}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    if abs(marco_total) < 0.01 and abs(moni_total) < 0.01:
-        return "Marco and Moni are settled up"
-
-    if marco_total > 0 and moni_total < 0:
-        return f"Moni owes Marco {format_currency(abs(moni_total))}"
-
-    if moni_total > 0 and marco_total < 0:
-        return f"Marco owes Moni {format_currency(abs(marco_total))}"
-
-    return "Split data needs review"
 
 # Load environment variables
 load_dotenv()
@@ -254,7 +349,10 @@ def get_transactions_data(project_name: str):
             log.warning("No transaction data found in sheet")
             return pd.DataFrame(columns=TRANSACTION_COLUMNS)
         log.info(f" Retrieved {len(values)-1} transaction records")
-        return normalize_transactions_dataframe(values)
+        df = normalize_transactions_dataframe(values)
+        df = normalize_project_amounts(df, project_name)
+        _set_cached_transactions(project_name, df)
+        return df
     except Exception as e:
         if "Unable to parse range" in str(e):
             log.warning(f"Missing range for project {project_name}. Re-verifying sheet setup and retrying once.")
@@ -266,7 +364,25 @@ def get_transactions_data(project_name: str):
                 values = result.get('values', [])
                 if not values:
                     return pd.DataFrame(columns=TRANSACTION_COLUMNS)
-                return normalize_transactions_dataframe(values)
+                df = normalize_transactions_dataframe(values)
+                df = normalize_project_amounts(df, project_name)
+                _set_cached_transactions(project_name, df)
+                return df
+        error_text = str(e).lower()
+        if (
+            isinstance(e, TimeoutError)
+            or "timed out" in error_text
+            or "ssl" in error_text
+            or "record layer failure" in error_text
+        ):
+            cached_df = _get_cached_transactions(project_name)
+            if not cached_df.empty:
+                log.warning(
+                    "Google Sheets read failed for project %s. Using cached dashboard data.",
+                    project_name,
+                )
+                st.warning("Balances are temporarily using cached data because Google Sheets could not be reached.")
+                return cached_df
         log.error(f"❌ Failed to fetch transactions data: {str(e)}")
         raise
 
@@ -346,14 +462,13 @@ def initialize_filters():
     if 'filter_container_created' not in st.session_state:
         st.session_state.filter_container_created = False
 
-def get_date_filters(key:str="unique_global_filter"):
+def get_date_filters(df: pd.DataFrame, key:str="unique_global_filter"):
     """Common date filter UI component for all analytics"""
     initialize_filters()
     
     st.sidebar.subheader("📅 Date Filter")
     
     # Get min and max dates from the data
-    df = get_transactions_data(get_current_project())
     if not df.empty:
         df = df.copy()
         df['Date'] = parse_sheet_dates(df['Date'])
@@ -439,44 +554,70 @@ def show_overview_analytics(df, start_date, end_date):
     if df.empty:
         st.info("No transactions found for the selected period.")
         return
-    
-    # Filter data
-    df = filter_dataframe(df, start_date, end_date)
-    
-    # Display selected period
-    # st.caption(f"Showing data from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
-    
+
+    if is_personal_project(get_current_project()):
+        personal_summary = calculate_personal_summary(df)
+        render_personal_overview_cards(
+            personal_summary['income_total'],
+            personal_summary['expense_total'],
+            personal_summary['net_balance'],
+        )
+        return
+
     expense_df = df[df['Type'] == 'Expense'].copy()
     if expense_df.empty:
         st.info("No expense transactions found for the selected period.")
         return
 
     total_expense = expense_df['Amount'].sum()
-    user_balances = calculate_user_balances(expense_df)
-    settlement_message = build_settlement_message(user_balances)
+    payment_summary = calculate_payment_summary(expense_df)
     
-    render_overview_cards(user_balances, total_expense, settlement_message)
-    
-    # Monthly Summary
+    render_overview_cards(
+        payment_summary['paid_totals'],  # type: ignore[arg-type]
+        total_expense,
+        payment_summary['settlement_message'],  # type: ignore[arg-type]
+    )
+
+def show_expense_analytics(df, start_date, end_date):
+    st.subheader("💸 Expense Analytics")
+    expense_df = df[df['Type'] == 'Expense'].copy()
+    if expense_df.empty:
+        st.info("No expense transactions found for the selected period.")
+        return
+
+    income_df = df[df['Type'] == 'Income'].copy()
+
+    if is_personal_project(get_current_project()):
+        st.subheader("Cash Flow Summary")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Income", format_currency(income_df['Amount'].sum()))
+        with col2:
+            st.metric("Expenses", format_currency(expense_df['Amount'].sum()))
+        with col3:
+            st.metric("Net", format_balance(income_df['Amount'].sum() - expense_df['Amount'].sum()))
+
+        st.subheader("Recent Transactions")
+        recent_df = df.sort_values('Date', ascending=False).head(10)
+        st.dataframe(
+            recent_df[['Date', 'Type', 'Category', 'Amount', 'Description']].style.format({
+                'Amount': format_currency,
+                'Date': lambda x: x.strftime('%Y-%m-%d')
+            }),
+            hide_index=True,
+            width='stretch',
+        )
+
     st.subheader("Monthly Summary")
     monthly_summary = expense_df.groupby(expense_df['Date'].dt.strftime('%Y-%m'))['Amount'].sum().to_frame('Expense')
-    
-    # Monthly trend chart
-    fig_monthly = px.bar(monthly_summary, 
-                        title='Monthly Expenses',
-                        labels={'value': 'Amount ($)', 'index': 'Month'})
-    st.plotly_chart(fig_monthly)
-    
-    # Show monthly summary table
     st.dataframe(
         monthly_summary.style.format({
             'Expense': format_currency
         }),
-        use_container_width=True,
+        width='stretch',
         height=200
     )
-    
-    # Recent Transactions
+
     st.subheader("Recent Transactions")
     recent_df = expense_df.sort_values('Date', ascending=False).head(5)
     st.dataframe(
@@ -486,50 +627,6 @@ def show_overview_analytics(df, start_date, end_date):
         }),
         hide_index=True
     )
-    
-    expense_by_category = expense_df.groupby('Category')['Amount'].sum().sort_values(ascending=False).head(5)
-    fig_expense = px.pie(values=expense_by_category.values,
-                       names=expense_by_category.index,
-                       title='Top Expense Categories')
-    st.plotly_chart(fig_expense)
-    
-    # Add Spending Patterns Analysis
-    st.subheader("💡 Spending Insights")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Weekday vs Weekend spending
-        expense_df['Day_Type'] = expense_df['Date'].dt.dayofweek.map(lambda x: 'Weekend' if x >= 5 else 'Weekday')
-        daily_avg = expense_df.groupby('Day_Type')['Amount'].agg(['sum', 'count'])
-        daily_avg['avg'] = daily_avg['sum'] / daily_avg['count']
-        
-        st.caption("Weekday vs Weekend Spending")
-        st.dataframe(
-            daily_avg.style.format({
-                'sum': format_currency,
-                'avg': lambda x: f"{format_currency(x)}/day"
-            })
-        )
-    
-    with col2:
-        # Week of month analysis
-        expense_df['Week_of_Month'] = expense_df['Date'].dt.day.map(lambda x: (x-1)//7 + 1)
-        weekly_spending = expense_df.groupby('Week_of_Month')['Amount'].mean()
-        
-        fig_weekly = px.bar(weekly_spending,
-                          title='Average Spending by Week of Month',
-                          labels={'value': 'Amount ($)', 'Week_of_Month': 'Week'})
-        st.plotly_chart(fig_weekly)
-
-def show_expense_analytics(df, start_date, end_date):
-    st.subheader("💸 Expense Analytics")
-    expense_df = df[df['Type'] == 'Expense'].copy()
-    if expense_df.empty:
-        st.info("No expense transactions found for the selected period.")
-        return
-    
-    # Filter data
-    df = filter_dataframe(df, start_date, end_date)
     
     # Display selected period
     # st.caption(f"Showing data from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
@@ -559,7 +656,7 @@ def show_expense_analytics(df, start_date, end_date):
             top_expenses.to_frame().style.format({
                 'Amount': format_currency
             }),
-            use_container_width=True,
+            width='stretch',
             height=300
         )
     
@@ -613,6 +710,33 @@ def show_expense_analytics(df, start_date, end_date):
                         labels={'value': 'Growth Rate (%)', 'index': 'Month'})
     st.plotly_chart(fig_growth)
 
+    st.subheader("💡 Spending Insights")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        expense_df['Day_Type'] = expense_df['Date'].dt.dayofweek.map(lambda x: 'Weekend' if x >= 5 else 'Weekday')
+        daily_avg = expense_df.groupby('Day_Type')['Amount'].agg(['sum', 'count'])
+        daily_avg['avg'] = daily_avg['sum'] / daily_avg['count']
+
+        st.caption("Weekday vs Weekend Spending")
+        st.dataframe(
+            daily_avg.style.format({
+                'sum': format_currency,
+                'avg': lambda x: f"{format_currency(x)}/day"
+            })
+        )
+
+    with col2:
+        expense_df['Week_of_Month'] = expense_df['Date'].dt.day.map(lambda x: (x - 1) // 7 + 1)
+        weekly_spending = expense_df.groupby('Week_of_Month')['Amount'].mean()
+
+        fig_weekly = px.bar(
+            weekly_spending,
+            title='Average Spending by Week of Month',
+            labels={'value': 'Amount ($)', 'Week_of_Month': 'Week'},
+        )
+        st.plotly_chart(fig_weekly)
+
 def show_pending_transactions():
     """Display pending transactions section"""
     st.subheader("📋 Pending Transactions")
@@ -662,7 +786,7 @@ def show_pending_transactions():
                 to_receive['Due Date'] = to_receive['Due Date'].dt.strftime('%Y-%m-%d')
                 st.dataframe(
                     to_receive[['Date', 'Amount', 'Category', 'Description', 'Due Date']],
-                    use_container_width=True
+                    width='stretch'
                 )
         
         with tab2:
@@ -677,7 +801,7 @@ def show_pending_transactions():
                 to_pay['Due Date'] = to_pay['Due Date'].dt.strftime('%Y-%m-%d')
                 st.dataframe(
                     to_pay[['Date', 'Amount', 'Category', 'Description', 'Due Date']],
-                    use_container_width=True
+                    width='stretch'
                 )
     except Exception as e:
         log.error(f"Error displaying pending transactions: {str(e)}")
@@ -690,24 +814,40 @@ def show_analytics():
 
         project_name = get_current_project()
         render_global_header()
-        render_top_view_navigation("Balances")
+        if is_personal_project(project_name):
+            render_project_balance_banner(project_name)
+        else:
+            render_top_view_navigation("Balances")
+
+        raw_df = get_transactions_data(project_name)
 
         # Get date filters once for all tabs
-        start_date, end_date = get_date_filters(key="global_analytics_filter")
+        start_date, end_date = get_date_filters(raw_df, key="global_analytics_filter")
+        using_fallback_period = False
         
         # Get and filter data
-        df = get_transactions_data(project_name)
+        df = raw_df
         if not df.empty:
             df = df.copy()
             df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
             df['Date'] = parse_sheet_dates(df['Date'])
             df = df.dropna(subset=['Amount', 'Date'])
             filtered_df = filter_dataframe(df, start_date, end_date)
+            if filtered_df.empty and not df.empty:
+                log.warning(
+                    "No transactions matched the selected period for project %s. Falling back to all project transactions.",
+                    project_name,
+                )
+                filtered_df = df
+                using_fallback_period = True
         else:
             filtered_df = df
         
         # Display selected period
-        st.caption(f"Showing data from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+        if using_fallback_period:
+            st.caption("Showing all project transactions because the selected period returned no results.")
+        else:
+            st.caption(f"Showing data from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
         
         # Show tabs for different sections
         tab1, tab2 = st.tabs(["Overview", "Expense Analytics"])

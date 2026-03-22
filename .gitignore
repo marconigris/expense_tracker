@@ -10,3 +10,6 @@ wheels/
 .venv
 /rugged-choir-398914-e074525cfd1e.json
 /.envconfig/auth_users.yaml
+/.env
+/.env.*
+/.streamlit/secrets.toml

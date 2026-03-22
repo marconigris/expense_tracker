@@ -97,6 +97,24 @@ def convert_to_usd(amount: float, from_currency: str) -> float:
     return amount / rate
 
 
+def convert_currency(amount: float, from_currency: str, to_currency: str) -> float:
+    """
+    Convert an amount between supported currencies.
+    """
+    rates = get_exchange_rates()
+
+    if from_currency not in rates:
+        raise ValueError(f"Unknown currency: {from_currency}")
+    if to_currency not in rates:
+        raise ValueError(f"Unknown currency: {to_currency}")
+
+    if from_currency == to_currency:
+        return amount
+
+    usd_amount = amount / rates[from_currency]
+    return usd_amount * rates[to_currency]
+
+
 def get_supported_currencies():
     """Get list of supported currencies."""
     rates = get_exchange_rates()
