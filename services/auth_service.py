@@ -1,0 +1,101 @@
+"""
+Authentication service using streamlit-authenticator.
+Manages user login and session state.
+"""
+
+import streamlit as st
+import streamlit_authenticator as stauth
+import yaml
+import logging
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# Path to credentials file
+CREDENTIALS_PATH = Path(__file__).parent.parent / "config" / "auth_users.yaml"
+
+
+def load_authenticator():
+    """
+    Load the authenticator with user credentials.
+    """
+    try:
+        # Load credentials from file
+        with open(CREDENTIALS_PATH) as file:
+            config = yaml.safe_load(file)
+        
+        # Initialize authenticator
+        authenticator = stauth.Authenticate(
+            config['credentials'],
+            config['cookie']['name'],
+            config['cookie']['key'],
+            config['cookie']['expiry_days'],
+            config['pre-authorized']
+        )
+        return authenticator
+    except FileNotFoundError:
+        logger.error(f"Credentials file not found at {CREDENTIALS_PATH}")
+        raise
+    except Exception as e:
+        logger.error(f"Error loading authenticator: {e}")
+        raise
+
+
+def render_login() -> bool:
+    """
+    Render the login widget.
+    
+    Returns:
+        bool: True if user is authenticated, False otherwise
+    """
+    try:
+        authenticator = load_authenticator()
+        authenticator.login('main')
+        
+        # Check if user is authenticated
+        if st.session_state.get("authentication_status"):
+            return True
+        elif st.session_state.get("authentication_status") is False:
+            st.error('Username/password is incorrect')
+            return False
+        else:
+            st.warning('Please enter your username and password')
+            return False
+            
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        st.error(f"Authentication error: {e}")
+        return False
+
+
+def get_authenticated_username() -> str:
+    """
+    Get the username of the authenticated user.
+    
+    Returns:
+        str: Username if authenticated, empty string otherwise
+    """
+    if st.session_state.get("authentication_status"):
+        return st.session_state.get("username", "")
+    return ""
+
+
+def render_logout():
+    """
+    Render the logout button in the sidebar.
+    """
+    try:
+        authenticator = load_authenticator()
+        authenticator.logout('logout', 'sidebar')
+    except Exception as e:
+        logger.error(f"Logout error: {e}")
+
+
+def is_authenticated() -> bool:
+    """
+    Check if user is authenticated.
+    
+    Returns:
+        bool: True if authenticated, False otherwise
+    """
+    return st.session_state.get("authentication_status", False)

@@ -1,0 +1,23 @@
+credentials:
+  usernames:
+    marco:
+      email: marco@example.com
+      name: Marco
+      password: hashed_password_here  # See instructions to generate
+    juan:
+      email: juan@example.com
+      name: Juan
+      password: hashed_password_here
+    sofia:
+      email: sofia@example.com
+      name: Sofia
+      password: hashed_password_here
+
+cookie:
+  expiry_days: 30
+  key: your_secret_key_here
+  name: chetti_cookie
+
+pre-authorized:
+  emails:
+    - admin@example.com

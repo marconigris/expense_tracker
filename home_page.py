@@ -8,6 +8,7 @@ from utils.logging_utils import setup_logging
 from state import get_messages, add_message
 from bootstrap import ensure_startup, render_global_header
 from services.google_sheets import append_transactions
+from services.auth_service import get_authenticated_username
 from config.exchange_rates import convert_to_usd
 
 log = setup_logging("expense_tracker_home")
@@ -19,35 +20,8 @@ def render_add_expense_form() -> None:
     """Render the form to add a new expense."""
     st.subheader("Add Expense")
     
-    # Get username from multiple possible sources (must match bootstrap.py logic)
-    username = None
-    
-    # Try Streamlit Cloud auth (st.session_state.user attribute)
-    if hasattr(st.session_state, "user") and st.session_state.user:
-        try:
-            email = st.session_state.user.email
-            username = email.split("@")[0] if email else None
-            log.debug(f"Got username from st.session_state.user: {username}")
-        except Exception as e:
-            log.debug(f"Could not get user from st.session_state.user: {e}")
-    
-    # Fallback to direct st.secrets check
-    if not username:
-        try:
-            username = st.secrets.get("USERNAME")
-            if username:
-                log.debug(f"Got username from st.secrets: {username}")
-        except Exception as e:
-            log.debug(f"Could not get USERNAME from st.secrets: {e}")
-    
-    # Fallback to environment variable
-    if not username:
-        import os
-        username = os.getenv("USERNAME")
-        if username:
-            log.debug(f"Got username from environment: {username}")
-    
-    # Display who's logged in (this is now in the header, so removing here to avoid duplication)
+    # Get username from authenticated session
+    username = get_authenticated_username()
     
     with st.form(key="add_expense_form", clear_on_submit=True):
         amount = st.number_input(
@@ -140,9 +114,12 @@ def render_messages_log() -> None:
 def render() -> None:
     """
     Render Home screen with expense form and activity log.
+    Only shows content if user is authenticated.
     """
-    ensure_startup()
+    # Check authentication and setup sheets
+    if not ensure_startup():
+        return  # Stop rendering if not authenticated
+    
     render_global_header()
-
     render_add_expense_form()
     render_messages_log()
