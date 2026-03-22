@@ -19,12 +19,24 @@ def render_add_expense_form() -> None:
     """Render the form to add a new expense."""
     st.subheader("Add Expense")
     
-    # Get username from Streamlit secrets
-    try:
-        username = st.secrets.get("USERNAME", "")
-    except FileNotFoundError:
-        import os
-        username = os.getenv("USERNAME", "")
+    # Get username from Streamlit Cloud authenticated user
+    username = None
+    if hasattr(st.session_state, "user") and st.session_state.user:
+        # Extract username from email (e.g., "marco" from "marco@example.com")
+        email = st.session_state.user.email
+        username = email.split("@")[0] if email else None
+    
+    # Fallback to secrets if no authenticated user
+    if not username:
+        try:
+            username = st.secrets.get("USERNAME", "")
+        except FileNotFoundError:
+            import os
+            username = os.getenv("USERNAME", "")
+    
+    # Display who's logged in
+    if username:
+        st.info(f"👤 Logged in as: **{username}**")
     
     with st.form(key="add_expense_form", clear_on_submit=True):
         amount = st.number_input(
@@ -55,7 +67,7 @@ def render_add_expense_form() -> None:
             elif not description:
                 st.error("Please enter a description")
             else:
-                st.error("USERNAME not configured in Streamlit secrets")
+                st.error("No user authenticated. Please log in.")
 
 
 def _save_expense(amount: float, description: str, currency: str, user: str) -> None:
