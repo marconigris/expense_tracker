@@ -25,6 +25,13 @@ TRANSACTION_COLUMNS = [
     'User',
     'Marco Split %',
     'Moni Split %',
+    'Account',
+    'Scope',
+    'Source',
+    'Import Batch ID',
+    'External ID',
+    'Reconciled',
+    'Match ID',
 ]
 
 
@@ -113,13 +120,13 @@ def _get_project_sheet_values(project_name: str) -> list[list[str]]:
     try:
         result = service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
-            range=f'{project_name}!A1:J'
+            range=f'{project_name}!A1:Q'
         ).execute()
     except Exception as error:
         if "Unable to parse range" in str(error) and verify_sheets_setup():
             result = service.spreadsheets().values().get(
                 spreadsheetId=spreadsheet_id,
-                range=f'{project_name}!A1:J'
+                range=f'{project_name}!A1:Q'
             ).execute()
         else:
             raise

@@ -8,6 +8,7 @@ import streamlit.components.v1 as components
 from services.google_sheets import get_sheet_url
 from services.auth_service import render_login, render_logout, get_authenticated_username, is_authenticated
 from services.project_summary import get_personal_account_summary, get_shared_account_summary
+from ui_styles import inject_global_styles
 from utils.logging_utils import setup_logging
 from state import (
     init_session_state,
@@ -16,7 +17,14 @@ from state import (
     set_sidebar_autoclose_pending,
     consume_sidebar_autoclose,
 )
-from config.constants import DEFAULT_PROJECT, get_visible_projects, is_personal_project, get_project_config
+from config.constants import (
+    DEFAULT_PROJECT,
+    get_visible_projects,
+    is_personal_project,
+    is_private_flow_project,
+    is_business_project,
+    get_project_config,
+)
 
 log = setup_logging("expense_tracker_bootstrap")
 
@@ -32,18 +40,53 @@ def render_sidebar_navigation() -> None:
         set_current_project(fallback_project)
         current_project = fallback_project
 
-    st.sidebar.markdown("### Projects")
-    for project_name in visible_projects:
-        button_type = "primary" if current_project == project_name else "secondary"
+    shared_projects = [project for project in visible_projects if not is_private_flow_project(project)]
+    private_projects = [project for project in visible_projects if is_personal_project(project)]
+    business_projects = [project for project in visible_projects if is_business_project(project)]
+
+    def _render_project_buttons(project_names: list[str]) -> None:
+        for project_name in project_names:
+            button_type = "primary" if current_project == project_name else "secondary"
+            if st.sidebar.button(
+                project_name,
+                key=f"nav_project_{project_name}",
+                width="stretch",
+                type=button_type,
+            ):
+                set_current_project(project_name)
+                set_sidebar_autoclose_pending(True)
+                st.switch_page("Home.py")
+
+    if shared_projects:
+        st.sidebar.markdown("### Shared Spaces")
+        _render_project_buttons(shared_projects)
+
+    if private_projects:
+        st.sidebar.markdown("### Private Ledgers")
+        _render_project_buttons(private_projects)
+
+    if business_projects:
+        st.sidebar.markdown("### Business")
+        _render_project_buttons(business_projects)
+
+    if username == "marconigris":
+        st.sidebar.markdown("### Workflows")
         if st.sidebar.button(
-            project_name,
-            key=f"nav_project_{project_name}",
+            "Imports",
+            key="nav_imports",
             width="stretch",
-            type=button_type,
+            type="secondary",
         ):
-            set_current_project(project_name)
             set_sidebar_autoclose_pending(True)
-            st.switch_page("Home.py")
+            st.switch_page("pages/📥_Imports.py")
+        if st.sidebar.button(
+            "Classify Imports",
+            key="nav_classify_imports",
+            width="stretch",
+            type="secondary",
+        ):
+            set_sidebar_autoclose_pending(True)
+            st.switch_page("pages/🧾_Classify_Imports.py")
 
 
 def render_sidebar_footer() -> None:
@@ -85,6 +128,7 @@ def ensure_startup() -> bool:
         bool: True if user is authenticated and ready, False otherwise
     """
     init_session_state()
+    inject_global_styles()
 
     # Always render login first (at the top of the app).
     # render_login() may restore the user from the authenticator cookie on refresh,
@@ -158,7 +202,24 @@ def render_global_header() -> None:
     project_name = get_current_project()
     
     if username:
-        st.write(f"Hola **{username}**, welcome to **{project_name}**")
+        if is_business_project(project_name):
+            project_mode = "Business Ledger"
+        elif is_private_flow_project(project_name):
+            project_mode = "Private Ledger"
+        else:
+            project_mode = "Shared Expense Space"
+        st.markdown(
+            f"""
+            <div class="hero-header">
+                <div>
+                    <div class="hero-header__title">{project_name}</div>
+                    <div class="hero-header__subtitle">Hola {username}, everything for this project lives in one calm workspace.</div>
+                </div>
+                <div class="hero-badge">{project_mode}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     
 def render_top_view_navigation(active_view: str) -> None:
     """Render the top-level page switcher between Expense and Balances."""
@@ -182,6 +243,8 @@ def _get_currency_symbol(currency: str) -> str:
         "USD": "$",
         "EUR": "€",
         "DOP": "RD$",
+        "ARS": "ARS$",
+        "ZAR": "R",
     }.get(currency, f"{currency} ")
 
 
@@ -192,7 +255,7 @@ def _format_currency(amount: float, currency: str) -> str:
 def render_project_balance_banner(project_name: str) -> None:
     project_currency = get_project_config(project_name)["default_currency"]
     try:
-        if is_personal_project(project_name):
+        if is_private_flow_project(project_name):
             summary = get_personal_account_summary(project_name)
             banner_label = "Total Balance"
             balance_value = _format_currency(float(summary["net_balance"]), str(summary["currency"]))
@@ -212,7 +275,7 @@ def render_project_balance_banner(project_name: str) -> None:
     except Exception as error:
         log.warning("Failed to load project summary for %s: %s", project_name, error)
         balance_value = _format_currency(0.0, project_currency)
-        if is_personal_project(project_name):
+        if is_private_flow_project(project_name):
             banner_label = "Total Balance"
             meta_values = [
                 f"Income {_format_currency(0.0, project_currency)}",

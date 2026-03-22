@@ -21,6 +21,11 @@ PROJECTS = {
         "type": "personal",
         "allowed_users": ["marconigris"],
     },
+    "Coaching": {
+        "default_currency": "USD",
+        "type": "business",
+        "allowed_users": ["marconigris"],
+    },
 }
 
 CATEGORIES = {
@@ -30,11 +35,13 @@ CATEGORIES = {
         'Transport': [],
         'Eating Out': [],
         'Trips': [],
+        'Imported': [],
     },
     'Income': {
         'Salary': ['Regular', 'Bonus', 'Overtime'],
         'Investment': ['Dividends', 'Interest', 'Capital Gains'],
-        'Other': ['Gifts', 'Refunds', 'Miscellaneous']
+        'Other': ['Gifts', 'Refunds', 'Miscellaneous'],
+        'Imported': [],
     },
     'To Receive': {
         'Pending Income': ['Salary', 'Investment', 'Other']
@@ -68,3 +75,13 @@ def get_visible_projects(username: str | None) -> list[str]:
 def is_personal_project(project_name: str) -> bool:
     """Whether the project uses personal-accounting behavior."""
     return get_project_config(project_name).get("type") == "personal"
+
+
+def is_private_flow_project(project_name: str) -> bool:
+    """Whether the project uses the non-shared income/expense flow."""
+    return get_project_config(project_name).get("type") in {"personal", "business"}
+
+
+def is_business_project(project_name: str) -> bool:
+    """Whether the project is a business ledger."""
+    return get_project_config(project_name).get("type") == "business"

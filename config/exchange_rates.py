@@ -14,6 +14,8 @@ FALLBACK_RATES = {
     "USD": 1.0,
     "EUR": 0.92,
     "DOP": 58.50,
+    "ARS": 1080.00,
+    "ZAR": 18.40,
 }
 
 
@@ -51,7 +53,7 @@ def get_exchange_rates() -> Dict[str, float]:
         ).execute()
         
         values = result.get('values', [])
-        rates = {}
+        rates = dict(FALLBACK_RATES)
         
         # Parse the sheet (skip header row)
         for row in values[1:]:

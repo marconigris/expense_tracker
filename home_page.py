@@ -9,7 +9,7 @@ from bootstrap import ensure_startup, render_global_header, render_top_view_navi
 from services.google_sheets import append_transactions
 from services.auth_service import get_authenticated_username
 from config.exchange_rates import convert_currency
-from config.constants import CATEGORIES, PROJECTS, is_personal_project
+from config.constants import CATEGORIES, PROJECTS, is_private_flow_project
 from state import get_current_project
 
 log = setup_logging("expense_tracker_home")
@@ -38,7 +38,7 @@ def _render_currency_selector(label_visibility: str = "visible") -> str:
     """Render the currency picker as native segmented buttons."""
     return st.segmented_control(
         "Currency",
-        ["USD", "EUR", "DOP"],
+        ["USD", "EUR", "DOP", "ARS", "ZAR"],
         selection_mode="single",
         key="expense_currency",
         label_visibility=label_visibility,
@@ -253,7 +253,7 @@ def render_add_expense_form() -> None:
     # Get username from authenticated session
     username = get_authenticated_username()
     current_project = get_current_project()
-    personal_project = is_personal_project(current_project)
+    personal_project = is_private_flow_project(current_project)
     _initialize_expense_state(username, current_project)
     _apply_pending_reset(username, current_project)
 
@@ -410,6 +410,13 @@ def _save_expense(
             user,                          # User
             marco_share,                   # Marco Split %
             moni_share,                    # Moni Split %
+            project_name,                  # Account
+            "private" if is_private_flow_project(project_name) else "shared",  # Scope
+            "manual",                      # Source
+            "",                            # Import Batch ID
+            "",                            # External ID
+            "",                            # Reconciled
+            "",                            # Match ID
         ]]
         
         log.info(
@@ -420,7 +427,7 @@ def _save_expense(
         append_transactions(project_name, values)
         
         split_note = ""
-        if not is_personal_project(project_name) and (marco_share, moni_share) not in {(100, 0), (0, 100)}:
+        if not is_private_flow_project(project_name) and (marco_share, moni_share) not in {(100, 0), (0, 100)}:
             split_note = f" Payment: Marco {marco_share}% / Moni {moni_share}%."
         msg = f"✅ Saved {transaction_type.lower()} in {category}: {currency} {amount:.2f} ({project_currency} {project_amount:.2f}).{split_note}"
         log.info(f"Successfully saved transaction: {msg}")
@@ -445,6 +452,6 @@ def render() -> None:
     render_global_header()
     current_project = get_current_project()
     render_project_balance_banner(current_project)
-    if not is_personal_project(current_project):
+    if not is_private_flow_project(current_project):
         render_top_view_navigation("Expense")
     render_add_expense_form()

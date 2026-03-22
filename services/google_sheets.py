@@ -2,6 +2,7 @@ import logging
 import json
 import os
 from typing import Any, List
+from datetime import datetime
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -13,6 +14,18 @@ logger = logging.getLogger(__name__)
 
 # Usamos el mismo nombre de variable que tu Home.py original
 SPREADSHEET_ID_ENV_VAR = "GOOGLE_SHEET_ID"
+IMPORTS_SHEET_NAME = "Imported Transactions"
+IMPORT_PROFILES_SHEET_NAME = "Import Profiles"
+IMPORT_PROFILE_HEADERS = [
+    'Account',
+    'Date Column',
+    'Amount Column',
+    'Description Column',
+    'Currency Column',
+    'External ID Column',
+    'Fallback Currency',
+    'Updated At',
+]
 
 OLD_EXPENSE_HEADERS = [
     'Date',
@@ -37,7 +50,15 @@ EXPENSE_HEADERS = [
     'User',
     'Marco Split %',
     'Moni Split %',
+    'Account',
+    'Scope',
+    'Source',
+    'Import Batch ID',
+    'External ID',
+    'Reconciled',
+    'Match ID',
 ]
+TRANSACTION_HEADERS = EXPENSE_HEADERS
 
 SPLIT_EXPENSE_HEADERS = [
     'Date',
@@ -51,6 +72,8 @@ SPLIT_EXPENSE_HEADERS = [
     'Marco Split %',
     'Moni Split %',
 ]
+
+TRANSACTION_END_COLUMN = 'Q'
 
 
 def _default_split_for_user(user: str) -> list[int | str]:
@@ -79,6 +102,13 @@ def _migrate_expense_rows(existing_rows: list[list[str]]) -> list[list[Any]]:
             user,
             marco_split,
             moni_split,
+            '',
+            '',
+            'manual',
+            '',
+            '',
+            '',
+            '',
         ])
     return migrated_rows
 
@@ -98,6 +128,13 @@ def _migrate_split_rows(existing_rows: list[list[str]]) -> list[list[Any]]:
             padded_row[7],
             padded_row[8],
             padded_row[9],
+            '',
+            '',
+            'manual',
+            '',
+            '',
+            '',
+            '',
         ])
     return migrated_rows
 
@@ -120,6 +157,13 @@ def _migrate_project_rows(existing_rows: list[list[str]]) -> dict[str, list[list
             padded_row[8],
             padded_row[9],
             padded_row[10],
+            '',
+            '',
+            'manual',
+            '',
+            '',
+            '',
+            '',
         ])
     return migrated_rows
 
@@ -146,7 +190,7 @@ def _ensure_sheet(service: Any, spreadsheet_id: str, sheet_name: str, existing_s
     )
 
 
-def _read_sheet_values(service: Any, spreadsheet_id: str, sheet_name: str, end_column: str = 'J') -> list[list[str]]:
+def _read_sheet_values(service: Any, spreadsheet_id: str, sheet_name: str, end_column: str = TRANSACTION_END_COLUMN) -> list[list[str]]:
     result = _execute_request(
         service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
@@ -160,7 +204,7 @@ def _write_sheet_header(service: Any, spreadsheet_id: str, sheet_name: str) -> N
     _execute_request(
         service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range=f'{sheet_name}!A1:J1',
+            range=f'{sheet_name}!A1:{TRANSACTION_END_COLUMN}1',
             valueInputOption='RAW',
             body={'values': [EXPENSE_HEADERS]},
         )
@@ -171,7 +215,7 @@ def _write_project_rows(service: Any, spreadsheet_id: str, sheet_name: str, rows
     _execute_request(
         service.spreadsheets().values().clear(
             spreadsheetId=spreadsheet_id,
-            range=f'{sheet_name}!A:J',
+            range=f'{sheet_name}!A:{TRANSACTION_END_COLUMN}',
             body={},
         )
     )
@@ -180,7 +224,34 @@ def _write_project_rows(service: Any, spreadsheet_id: str, sheet_name: str, rows
         _execute_request(
             service.spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id,
-                range=f'{sheet_name}!A2:J{len(rows) + 1}',
+                range=f'{sheet_name}!A2:{TRANSACTION_END_COLUMN}{len(rows) + 1}',
+                valueInputOption='USER_ENTERED',
+                body={'values': rows},
+            )
+        )
+
+
+def _write_custom_sheet(service: Any, spreadsheet_id: str, sheet_name: str, headers: list[str], rows: list[list[Any]], end_column: str) -> None:
+    _execute_request(
+        service.spreadsheets().values().clear(
+            spreadsheetId=spreadsheet_id,
+            range=f'{sheet_name}!A:{end_column}',
+            body={},
+        )
+    )
+    _execute_request(
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range=f'{sheet_name}!A1:{end_column}1',
+            valueInputOption='RAW',
+            body={'values': [headers]},
+        )
+    )
+    if rows:
+        _execute_request(
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=f'{sheet_name}!A2:{end_column}{len(rows) + 1}',
                 valueInputOption='USER_ENTERED',
                 body={'values': rows},
             )
@@ -270,6 +341,8 @@ def initialize_exchange_rates_sheet(service: Any, spreadsheet_id: str) -> None:
             ['USD', 1.0],
             ['EUR', '=GOOGLEFINANCE("CURRENCY:USDEUR")'],
             ['DOP', '=GOOGLEFINANCE("CURRENCY:USDDOP")'],
+            ['ARS', '=GOOGLEFINANCE("CURRENCY:USDARS")'],
+            ['ZAR', '=GOOGLEFINANCE("CURRENCY:USDZAR")'],
         ]
         
         # Write headers
@@ -286,7 +359,7 @@ def initialize_exchange_rates_sheet(service: Any, spreadsheet_id: str) -> None:
         _execute_request(
             service.spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id,
-                range='ExchangeRates!A2:B4',
+                range='ExchangeRates!A2:B6',
                 valueInputOption='USER_ENTERED',
                 body={'values': formulas}
             )
@@ -325,6 +398,8 @@ def verify_sheets_setup() -> bool:
         
         for project_name in PROJECTS:
             _ensure_sheet(service, spreadsheet_id, project_name, existing_sheets)
+        _ensure_sheet(service, spreadsheet_id, IMPORTS_SHEET_NAME, existing_sheets)
+        _ensure_sheet(service, spreadsheet_id, IMPORT_PROFILES_SHEET_NAME, existing_sheets)
 
         # Refresh metadata after potential sheet creation
         refreshed_metadata = _execute_request(
@@ -339,6 +414,18 @@ def verify_sheets_setup() -> bool:
             if not project_headers or project_headers != EXPENSE_HEADERS:
                 logger.info(f"Setting up {project_name} sheet headers...")
                 _write_sheet_header(service, spreadsheet_id, project_name)
+
+        imports_values = _read_sheet_values(service, spreadsheet_id, IMPORTS_SHEET_NAME)
+        imports_headers = imports_values[0] if imports_values else []
+        if not imports_headers or imports_headers != EXPENSE_HEADERS:
+            logger.info(f"Setting up {IMPORTS_SHEET_NAME} sheet headers...")
+            _write_sheet_header(service, spreadsheet_id, IMPORTS_SHEET_NAME)
+
+        import_profiles_values = _read_sheet_values(service, spreadsheet_id, IMPORT_PROFILES_SHEET_NAME, end_column='H')
+        import_profiles_headers = import_profiles_values[0] if import_profiles_values else []
+        if not import_profiles_headers or import_profiles_headers != IMPORT_PROFILE_HEADERS:
+            logger.info(f"Setting up {IMPORT_PROFILES_SHEET_NAME} sheet headers...")
+            _write_custom_sheet(service, spreadsheet_id, IMPORT_PROFILES_SHEET_NAME, IMPORT_PROFILE_HEADERS, [], 'H')
 
         if 'Expenses' in existing_sheets:
             legacy_values = _read_sheet_values(service, spreadsheet_id, 'Expenses', end_column='K')
@@ -417,7 +504,7 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
     
     # Ensure range_name specifies just the columns, not rows (let Google Sheets find next empty row)
     if "!" not in range_name:
-        range_name = f"{range_name}!A:J"  # Columns A-J for per-project expense schema
+        range_name = f"{range_name}!A:{TRANSACTION_END_COLUMN}"  # Columns for per-project transaction schema
 
     try:
         logger.info(f"Appending transactions to range: {range_name}")
@@ -448,3 +535,111 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
                 return
         logger.exception("Error appending transactions to Google Sheets")
         raise e
+
+
+def get_import_profiles() -> list[dict[str, str]]:
+    service = get_sheets_service()
+
+    try:
+        spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
+    except FileNotFoundError:
+        spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+
+    if not spreadsheet_id:
+        raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")
+
+    try:
+        values = _read_sheet_values(service, spreadsheet_id, IMPORT_PROFILES_SHEET_NAME, end_column='H')
+    except Exception as error:
+        if _is_missing_range_error(error) and verify_sheets_setup():
+            values = _read_sheet_values(service, spreadsheet_id, IMPORT_PROFILES_SHEET_NAME, end_column='H')
+        else:
+            raise
+
+    if not values:
+        return []
+
+    headers = values[0]
+    profiles: list[dict[str, str]] = []
+    for row in values[1:]:
+        padded_row = row + [''] * max(0, len(headers) - len(row))
+        profiles.append({header: str(value) for header, value in zip(headers, padded_row)})
+    return profiles
+
+
+def save_import_profile(
+    account: str,
+    date_column: str,
+    amount_column: str,
+    description_column: str,
+    currency_column: str,
+    external_id_column: str,
+    fallback_currency: str,
+) -> None:
+    service = get_sheets_service()
+
+    try:
+        spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
+    except FileNotFoundError:
+        spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+
+    if not spreadsheet_id:
+        raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")
+
+    profiles = get_import_profiles()
+    normalized_account = account.strip().lower()
+    updated_row = {
+        'Account': account.strip(),
+        'Date Column': date_column,
+        'Amount Column': amount_column,
+        'Description Column': description_column,
+        'Currency Column': currency_column,
+        'External ID Column': external_id_column,
+        'Fallback Currency': fallback_currency,
+        'Updated At': datetime.now().isoformat(timespec='seconds'),
+    }
+
+    filtered_profiles = [
+        profile for profile in profiles
+        if profile.get('Account', '').strip().lower() != normalized_account
+    ]
+    filtered_profiles.append(updated_row)
+
+    rows = [
+        [profile.get(header, '') for header in IMPORT_PROFILE_HEADERS]
+        for profile in filtered_profiles
+    ]
+    _write_custom_sheet(service, spreadsheet_id, IMPORT_PROFILES_SHEET_NAME, IMPORT_PROFILE_HEADERS, rows, 'H')
+
+
+def get_transaction_rows(sheet_name: str) -> list[list[str]]:
+    service = get_sheets_service()
+
+    try:
+        spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
+    except FileNotFoundError:
+        spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+
+    if not spreadsheet_id:
+        raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")
+
+    try:
+        return _read_sheet_values(service, spreadsheet_id, sheet_name, end_column=TRANSACTION_END_COLUMN)
+    except Exception as error:
+        if _is_missing_range_error(error) and verify_sheets_setup():
+            return _read_sheet_values(service, spreadsheet_id, sheet_name, end_column=TRANSACTION_END_COLUMN)
+        raise
+
+
+def overwrite_transaction_rows(sheet_name: str, rows: list[list[Any]]) -> None:
+    service = get_sheets_service()
+
+    try:
+        spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
+    except FileNotFoundError:
+        spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+
+    if not spreadsheet_id:
+        raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")
+
+    _write_project_rows(service, spreadsheet_id, sheet_name, rows)

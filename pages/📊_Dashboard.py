@@ -12,7 +12,7 @@ from utils.logging_utils import setup_logging
 from bootstrap import ensure_startup, render_global_header, render_top_view_navigation, render_project_balance_banner
 from state import get_current_project
 from services.google_sheets import verify_sheets_setup
-from config.constants import PROJECTS, is_personal_project
+from config.constants import PROJECTS, is_private_flow_project
 from config.exchange_rates import convert_currency
 
 log = setup_logging("expense_tracker_analytics")
@@ -30,6 +30,8 @@ def get_currency_symbol(currency: str) -> str:
         "USD": "$",
         "EUR": "€",
         "DOP": "RD$",
+        "ARS": "ARS$",
+        "ZAR": "R",
     }.get(currency, f"{currency} ")
 
 
@@ -54,6 +56,13 @@ TRANSACTION_COLUMNS = [
     'User',
     'Marco Split %',
     'Moni Split %',
+    'Account',
+    'Scope',
+    'Source',
+    'Import Batch ID',
+    'External ID',
+    'Reconciled',
+    'Match ID',
 ]
 TRANSACTION_CACHE_KEY = "dashboard_transactions_cache"
 
@@ -341,7 +350,7 @@ def get_transactions_data(project_name: str):
         log.debug("Fetching transactions data from Google Sheets")
         result = service.spreadsheets().values().get(
             spreadsheetId=SHEET_ID,
-            range=f'{project_name}!A1:J'
+            range=f'{project_name}!A1:Q'
         ).execute()
         
         values = result.get('values', [])
@@ -359,7 +368,7 @@ def get_transactions_data(project_name: str):
             if verify_sheets_setup():
                 result = service.spreadsheets().values().get(
                     spreadsheetId=SHEET_ID,
-                    range=f'{project_name}!A1:J'
+                    range=f'{project_name}!A1:Q'
                 ).execute()
                 values = result.get('values', [])
                 if not values:
@@ -555,7 +564,7 @@ def show_overview_analytics(df, start_date, end_date):
         st.info("No transactions found for the selected period.")
         return
 
-    if is_personal_project(get_current_project()):
+    if is_private_flow_project(get_current_project()):
         personal_summary = calculate_personal_summary(df)
         render_personal_overview_cards(
             personal_summary['income_total'],
@@ -587,7 +596,7 @@ def show_expense_analytics(df, start_date, end_date):
 
     income_df = df[df['Type'] == 'Income'].copy()
 
-    if is_personal_project(get_current_project()):
+    if is_private_flow_project(get_current_project()):
         st.subheader("Cash Flow Summary")
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -815,7 +824,7 @@ def show_analytics():
         project_name = get_current_project()
         render_global_header()
         render_project_balance_banner(project_name)
-        if not is_personal_project(project_name):
+        if not is_private_flow_project(project_name):
             render_top_view_navigation("Balances")
 
         raw_df = get_transactions_data(project_name)
