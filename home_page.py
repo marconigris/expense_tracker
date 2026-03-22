@@ -5,11 +5,11 @@ import datetime as dt
 import streamlit as st
 
 from utils.logging_utils import setup_logging
-from state import get_messages, add_message, clear_messages
 from bootstrap import ensure_startup, render_global_header
 from services.google_sheets import append_transactions
 from services.auth_service import get_authenticated_username
 from config.exchange_rates import convert_to_usd
+from config.constants import CATEGORIES
 
 log = setup_logging("expense_tracker_home")
 
@@ -32,8 +32,80 @@ def _render_mobile_form_styles() -> None:
     st.markdown(
         """
         <style>
+        div[data-testid="stForm"] {
+            border: none;
+            padding: 0;
+            background: transparent;
+        }
+
+        .expense-shell {
+            display: grid;
+            gap: 0.9rem;
+            margin: 0.75rem 0 1rem;
+        }
+
+        .expense-hero {
+            border-radius: 1.6rem;
+            padding: 1rem 1rem 1.1rem;
+            background: linear-gradient(180deg, #101828 0%, #1f2937 100%);
+            color: #f8fafc;
+            box-shadow: 0 20px 44px rgba(15, 23, 42, 0.18);
+        }
+
+        .expense-hero-kicker {
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            opacity: 0.72;
+            margin-bottom: 0.35rem;
+        }
+
+        .expense-hero-title {
+            font-size: 1.65rem;
+            line-height: 1.05;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+        }
+
+        .expense-card {
+            border-radius: 1.6rem;
+            padding: 0.2rem 0.3rem 0.4rem;
+            background: linear-gradient(180deg, #ffffff 0%, #f4f6fb 100%);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+        }
+
         div[data-testid="stNumberInput"] button {
             display: none;
+        }
+
+        div[data-testid="stNumberInput"],
+        div[data-testid="stTextInput"],
+        div[data-testid="stSelectbox"],
+        div[data-testid="stSegmentedControl"] {
+            padding-top: 0.25rem;
+        }
+
+        div[data-testid="stNumberInput"] input,
+        div[data-testid="stTextInput"] input {
+            border-radius: 1rem;
+            background: #ffffff;
+        }
+
+        div[data-baseweb="select"] > div {
+            border-radius: 1rem;
+            background: #ffffff;
+        }
+
+        div[data-testid="stFormSubmitButton"] button {
+            min-height: 3.15rem;
+            border-radius: 999px;
+            background: linear-gradient(180deg, #111827 0%, #1f2937 100%);
+            color: #f8fafc;
+            border: none;
+            font-weight: 700;
+            box-shadow: 0 14px 26px rgba(15, 23, 42, 0.16);
         }
 
         div[data-testid="stNumberInput"] input::-webkit-outer-spin-button,
@@ -47,6 +119,15 @@ def _render_mobile_form_styles() -> None:
         }
 
         @media (max-width: 640px) {
+            .expense-hero,
+            .expense-card {
+                border-radius: 1.3rem;
+            }
+
+            .expense-hero-title {
+                font-size: 1.45rem;
+            }
+
             div[data-testid="stSegmentedControl"] button {
                 min-height: 2.75rem;
             }
@@ -57,16 +138,34 @@ def _render_mobile_form_styles() -> None:
     )
 
 
+def _render_expense_intro() -> None:
+    st.markdown(
+        """
+        <div class="expense-shell">
+            <div class="expense-hero">
+                <div class="expense-hero-kicker">Quick Add</div>
+                <div class="expense-hero-title">Track an expense in a few taps</div>
+            </div>
+            <div class="expense-card">
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _close_expense_card() -> None:
+    st.markdown("</div></div>", unsafe_allow_html=True)
+
+
 def render_add_expense_form() -> None:
     """Render the form to add a new expense."""
-    st.subheader("Add Expense")
     _render_mobile_form_styles()
+    _render_expense_intro()
     
     # Get username from authenticated session
     username = get_authenticated_username()
+    expense_categories = CATEGORIES["Expense"]
     
     with st.form(key="add_expense_form", clear_on_submit=True):
-        # Row 0: Amount and Currency
         col1, col2 = st.columns([0.7, 1.3], gap="medium")
         
         with col1:
@@ -81,8 +180,22 @@ def render_add_expense_form() -> None:
         
         with col2:
             currency = _render_currency_selector()
-        
-        # Row 1: Description
+
+        col3, col4 = st.columns(2, gap="medium")
+        with col3:
+            category = st.selectbox(
+                "Category",
+                list(expense_categories.keys()),
+                key="expense_category",
+            )
+
+        with col4:
+            subcategory = st.selectbox(
+                "Subcategory",
+                expense_categories[category],
+                key="expense_subcategory",
+            )
+
         description = st.text_input(
             "Description",
             placeholder="e.g., Groceries, Gas, Coffee"
@@ -92,7 +205,7 @@ def render_add_expense_form() -> None:
         
         if submitted:
             if amount and amount > 0 and description and username:
-                _save_expense(amount, description, currency, username)
+                _save_expense(amount, description, currency, category, subcategory, username)
             elif amount is None:
                 st.error("Please enter an amount")
             elif amount == 0:
@@ -102,8 +215,17 @@ def render_add_expense_form() -> None:
             else:
                 st.error("No user authenticated. Please log in.")
 
+    _close_expense_card()
 
-def _save_expense(amount: float, description: str, currency: str, user: str) -> None:
+
+def _save_expense(
+    amount: float,
+    description: str,
+    currency: str,
+    category: str,
+    subcategory: str,
+    user: str,
+) -> None:
     """Save expense to Google Sheets with currency conversion."""
     try:
         today = dt.date.today().isoformat()
@@ -111,14 +233,12 @@ def _save_expense(amount: float, description: str, currency: str, user: str) -> 
         # Convert the input amount to USD
         usd_amount = convert_to_usd(amount, currency)
         
-        # Full row: Date, Amount (USD), Type, Category, Subcategory, Description, Currency Amount, Currency, User
-        # Type, Category, Subcategory are defaults since simplified form doesn't include them
         values = [[
             today,                          # Date
             round(usd_amount, 2),          # Amount (converted to USD)
             "Expense",                     # Type (default)
-            "Other",                       # Category (default)
-            "Miscellaneous",              # Subcategory (default)
+            category,                      # Category
+            subcategory,                   # Subcategory
             description,                   # Description
             amount,                        # Currency Amount (original input)
             currency,                      # Currency
@@ -132,9 +252,8 @@ def _save_expense(amount: float, description: str, currency: str, user: str) -> 
         
         append_transactions("Expenses", values)
         
-        msg = f"✅ Expense saved by {user}: {currency} {amount} (${usd_amount:.2f} USD) - {description}"
+        msg = f"✅ Saved {category} / {subcategory}: {currency} {amount:.2f} ({format_usd(usd_amount)})"
         log.info(f"Successfully saved expense: {msg}")
-        add_message("assistant", msg)
         st.success(msg)
     except ValueError as e:
         log.error(f"Currency conversion error: {e}")
@@ -144,31 +263,15 @@ def _save_expense(amount: float, description: str, currency: str, user: str) -> 
         st.error(f"Failed to save expense: {str(e)}")
 
 
-def render_messages_log() -> None:
-    """Render the activity log."""
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.subheader("Activity Log")
-    with col2:
-        if st.button("🗑️ Clear", key="clear_log_btn", use_container_width=True):
-            clear_messages()
-            st.rerun()
-    
-    messages = get_messages()
-    if not messages:
-        st.info("No activity yet")
-        return
-    
-    for message in messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+def format_usd(amount: float) -> str:
+    return f"${amount:.2f} USD"
 
 
 # ---------- PUBLIC ENTRYPOINT ----------
 
 def render() -> None:
     """
-    Render Home screen with expense form and activity log.
+    Render Home screen with expense form.
     Only shows content if user is authenticated.
     """
     # Check authentication and setup sheets
@@ -177,4 +280,3 @@ def render() -> None:
     
     render_global_header()
     render_add_expense_form()
-    render_messages_log()
