@@ -15,6 +15,20 @@ logger = logging.getLogger(__name__)
 CREDENTIALS_PATH = Path(__file__).parent.parent / "config" / "auth_users.yaml"
 
 
+def _convert_to_dict(obj):
+    """
+    Recursively convert Streamlit secret objects to plain dicts.
+    """
+    if isinstance(obj, dict):
+        return {k: _convert_to_dict(v) for k, v in obj.items()}
+    elif hasattr(obj, '__dict__'):
+        return _convert_to_dict(obj.__dict__)
+    elif isinstance(obj, (list, tuple)):
+        return type(obj)(_convert_to_dict(item) for item in obj)
+    else:
+        return obj
+
+
 def load_authenticator():
     """
     Load the authenticator with user credentials from secrets or file.
@@ -22,12 +36,11 @@ def load_authenticator():
     try:
         # Try to load from Streamlit secrets first (production)
         if 'credentials' in st.secrets:
-            # Access secrets using getattr to avoid item assignment issues
-            credentials = getattr(st.secrets, 'credentials', None)
-            cookie = getattr(st.secrets, 'cookie', None)
+            # Convert Streamlit secrets to plain dict recursively
+            secrets_dict = _convert_to_dict(dict(st.secrets))
             config = {
-                'credentials': credentials,
-                'cookie': cookie
+                'credentials': secrets_dict['credentials'],
+                'cookie': secrets_dict['cookie']
             }
         else:
             # Fallback to file (local development)
