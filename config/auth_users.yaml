@@ -4,9 +4,9 @@ cookie:
   name: chetti_cookie
 credentials:
   usernames:
-    marconigris:
+    monigila:
       email: ''
-      name: Marco
-      password: $2b$12$kErWvW7W7Fa/CSTDQ/yDIeBQsGYva.WnXXkfQcBv0LsijBlcucC7y
+      name: Moni
+      password: $2b$12$5/nlSe3BHU.bEeAOa6h5PuNLevwfzYxovR3lEBkNZagp6ftDzlM4.
 pre-authorized:
   emails: []
