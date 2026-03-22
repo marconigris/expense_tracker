@@ -41,9 +41,29 @@ def render_global_header() -> None:
     """
     Renderiza elementos comunes en la parte superior:
     - título
+    - saludo con nombre de usuario
     - enlace al Google Sheet
     """
     st.title("Chetti Accounting ❤️")
+    
+    # Get username from Streamlit Cloud authenticated user
+    username = None
+    if hasattr(st.session_state, "user") and st.session_state.user:
+        # Extract username from email (e.g., "marco" from "marco@example.com")
+        email = st.session_state.user.email
+        username = email.split("@")[0] if email else None
+    
+    # Fallback to secrets if no authenticated user
+    if not username:
+        try:
+            username = st.secrets.get("USERNAME", "")
+        except FileNotFoundError:
+            import os
+            username = os.getenv("USERNAME", "")
+    
+    # Display greeting with username
+    if username:
+        st.write(f"¡Hola, **{username}**!")
 
     sheet_url = get_main_sheet_url()
     if sheet_url:
