@@ -38,9 +38,21 @@ def load_authenticator():
         if 'credentials' in st.secrets:
             # Convert Streamlit secrets to plain dict recursively
             secrets_dict = _convert_to_dict(dict(st.secrets))
+            
+            # Validate structure
+            if 'cookie' not in secrets_dict:
+                raise KeyError("'cookie' section not found in secrets")
+            if 'credentials' not in secrets_dict:
+                raise KeyError("'credentials' section not found in secrets")
+            
+            cookie = secrets_dict['cookie']
+            if not isinstance(cookie, dict) or 'name' not in cookie or 'key' not in cookie:
+                logger.error(f"Invalid cookie structure: {cookie}")
+                raise KeyError("Cookie must have 'name' and 'key' fields")
+            
             config = {
                 'credentials': secrets_dict['credentials'],
-                'cookie': secrets_dict['cookie']
+                'cookie': cookie
             }
         else:
             # Fallback to file (local development)
