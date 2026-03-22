@@ -13,6 +13,61 @@ logger = logging.getLogger(__name__)
 # Usamos el mismo nombre de variable que tu Home.py original
 SPREADSHEET_ID_ENV_VAR = "GOOGLE_SHEET_ID"
 
+OLD_EXPENSE_HEADERS = [
+    'Date',
+    'Amount',
+    'Type',
+    'Category',
+    'Subcategory',
+    'Description',
+    'Currency Amount',
+    'Currency',
+    'User',
+]
+
+EXPENSE_HEADERS = [
+    'Date',
+    'Amount',
+    'Type',
+    'Category',
+    'Description',
+    'Currency Amount',
+    'Currency',
+    'User',
+    'Marco Split %',
+    'Moni Split %',
+]
+
+
+def _default_split_for_user(user: str) -> list[int | str]:
+    normalized_user = user.strip().lower()
+    if normalized_user == "marconigris":
+        return [100, 0]
+    if normalized_user == "monigila":
+        return [0, 100]
+    return ["", ""]
+
+
+def _migrate_expense_rows(existing_rows: list[list[str]]) -> list[list[Any]]:
+    migrated_rows: list[list[Any]] = []
+    for row in existing_rows:
+        padded_row = row + [''] * max(0, len(OLD_EXPENSE_HEADERS) - len(row))
+        user = padded_row[8]
+        marco_split, moni_split = _default_split_for_user(user)
+        migrated_rows.append([
+            padded_row[0],
+            padded_row[1],
+            padded_row[2],
+            padded_row[3],
+            padded_row[5],
+            padded_row[6],
+            padded_row[7],
+            user,
+            marco_split,
+            moni_split,
+        ])
+    return migrated_rows
+
 
 @st.cache_resource
 def get_sheets_service():
@@ -149,20 +204,41 @@ def verify_sheets_setup() -> None:
             ).execute()
         
         # Set headers for full format (for dashboard compatibility)
-        headers = [['Date', 'Amount', 'Type', 'Category', 'Subcategory', 'Description', 'Currency Amount', 'Currency', 'User']]
+        headers = [EXPENSE_HEADERS]
         result = service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
-            range='Expenses!A1:I1'
+            range='Expenses!A1:J'
         ).execute()
         
-        current_headers = result.get('values', [])
+        current_values = result.get('values', [])
+        current_headers = current_values[0] if current_values else []
         
-        # Only update headers if they're missing or wrong
-        if not current_headers or current_headers[0] != headers[0]:
+        if current_headers == OLD_EXPENSE_HEADERS:
+            logger.info("Migrating Expenses sheet to split-aware schema...")
+            migrated_rows = _migrate_expense_rows(current_values[1:])
+            service.spreadsheets().values().clear(
+                spreadsheetId=spreadsheet_id,
+                range='Expenses!A:J',
+                body={},
+            ).execute()
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range='Expenses!A1:J1',
+                valueInputOption='RAW',
+                body={'values': headers},
+            ).execute()
+            if migrated_rows:
+                service.spreadsheets().values().update(
+                    spreadsheetId=spreadsheet_id,
+                    range=f'Expenses!A2:J{len(migrated_rows) + 1}',
+                    valueInputOption='USER_ENTERED',
+                    body={'values': migrated_rows},
+                ).execute()
+        elif not current_headers or current_headers != headers[0]:
             logger.info("Setting up Expenses sheet headers...")
             service.spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id,
-                range='Expenses!A1:I1',
+                range='Expenses!A1:J1',
                 valueInputOption='RAW',
                 body={'values': headers}
             ).execute()
@@ -210,7 +286,7 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
     
     # Ensure range_name specifies just the columns, not rows (let Google Sheets find next empty row)
     if "!" not in range_name:
-        range_name = f"{range_name}!A:I"  # Columns A-I for full schema with User
+        range_name = f"{range_name}!A:J"  # Columns A-J for split-aware expense schema
 
     try:
         logger.info(f"Appending transactions to range: {range_name}")

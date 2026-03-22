@@ -24,6 +24,66 @@ USER_DISPLAY_NAMES = {
     "monigila": "Moni",
 }
 
+TRANSACTION_COLUMNS = [
+    'Date',
+    'Amount',
+    'Type',
+    'Category',
+    'Description',
+    'Currency Amount',
+    'Currency',
+    'User',
+    'Marco Split %',
+    'Moni Split %',
+]
+
+
+def format_balance(amount: float) -> str:
+    if abs(amount) < 0.01:
+        return "$0.00"
+    if amount > 0:
+        return f"+{format_currency(amount)}"
+    return f"-{format_currency(abs(amount))}"
+
+
+def calculate_user_balances(expense_df: pd.DataFrame) -> dict[str, float]:
+    normalized_users = expense_df['User'].fillna('').str.strip().str.lower()
+    marco_share = pd.to_numeric(expense_df['Marco Split %'], errors='coerce').fillna(0.0)
+    moni_share = pd.to_numeric(expense_df['Moni Split %'], errors='coerce').fillna(0.0)
+
+    no_split_data = (marco_share + moni_share) == 0
+    marco_share = marco_share.where(~no_split_data, (normalized_users == 'marconigris').astype(float) * 100)
+    moni_share = moni_share.where(~no_split_data, (normalized_users == 'monigila').astype(float) * 100)
+
+    marco_paid = expense_df.loc[normalized_users == 'marconigris', 'Amount'].sum()
+    moni_paid = expense_df.loc[normalized_users == 'monigila', 'Amount'].sum()
+    marco_owed = (expense_df['Amount'] * (marco_share / 100)).sum()
+    moni_owed = (expense_df['Amount'] * (moni_share / 100)).sum()
+
+    return {
+        'Marco': marco_paid - marco_owed,
+        'Moni': moni_paid - moni_owed,
+    }
+
+
+def normalize_transactions_dataframe(values: list[list[str]]) -> pd.DataFrame:
+    if not values:
+        return pd.DataFrame(columns=TRANSACTION_COLUMNS)
+
+    raw_headers = values[0]
+    rows = values[1:]
+    normalized_rows = [
+        row[: len(raw_headers)] + [''] * max(0, len(raw_headers) - len(row))
+        for row in rows
+    ]
+    df = pd.DataFrame(normalized_rows, columns=raw_headers)
+
+    for column in TRANSACTION_COLUMNS:
+        if column not in df.columns:
+            df[column] = ''
+
+    return df[TRANSACTION_COLUMNS]
+
 
 def render_overview_cards(user_balances: dict[str, float], total_expense: float, settlement_message: str) -> None:
     st.markdown(
@@ -103,11 +163,11 @@ def render_overview_cards(user_balances: dict[str, float], total_expense: float,
             <div class="overview-pair">
                 <div class="overview-card">
                     <div class="overview-label">Marco</div>
-                    <div class="overview-value">{format_currency(user_balances["Marco"])}</div>
+                    <div class="overview-value">{format_balance(user_balances["Marco"])}</div>
                 </div>
                 <div class="overview-card">
                     <div class="overview-label">Moni</div>
-                    <div class="overview-value">{format_currency(user_balances["Moni"])}</div>
+                    <div class="overview-value">{format_balance(user_balances["Moni"])}</div>
                 </div>
             </div>
             <div class="overview-card primary">
@@ -127,15 +187,17 @@ def render_overview_cards(user_balances: dict[str, float], total_expense: float,
 def build_settlement_message(user_balances: dict[str, float]) -> str:
     marco_total = user_balances["Marco"]
     moni_total = user_balances["Moni"]
-    difference = abs(marco_total - moni_total) / 2
 
-    if difference < 0.01:
+    if abs(marco_total) < 0.01 and abs(moni_total) < 0.01:
         return "Marco and Moni are settled up"
 
-    if marco_total > moni_total:
-        return f"Moni owes Marco {format_currency(difference)}"
+    if marco_total > 0 and moni_total < 0:
+        return f"Moni owes Marco {format_currency(abs(moni_total))}"
 
-    return f"Marco owes Moni {format_currency(difference)}"
+    if moni_total > 0 and marco_total < 0:
+        return f"Marco owes Moni {format_currency(abs(marco_total))}"
+
+    return "Split data needs review"
 
 # Load environment variables
 load_dotenv()
@@ -168,44 +230,15 @@ def get_transactions_data():
         log.debug("Fetching transactions data from Google Sheets")
         result = service.spreadsheets().values().get(
             spreadsheetId=SHEET_ID,
-            range='Expenses!A1:I'
+            range='Expenses!A1:J'
         ).execute()
         
         values = result.get('values', [])
         if not values:
             log.warning("No transaction data found in sheet")
-            return pd.DataFrame(
-                columns=[
-                    'Date',
-                    'Amount',
-                    'Type',
-                    'Category',
-                    'Subcategory',
-                    'Description',
-                    'Currency Amount',
-                    'Currency',
-                    'User',
-                ]
-            )
-        
-        columns = [
-            'Date',
-            'Amount',
-            'Type',
-            'Category',
-            'Subcategory',
-            'Description',
-            'Currency Amount',
-            'Currency',
-            'User',
-        ]
-        normalized_rows = [
-            row[: len(columns)] + [''] * max(0, len(columns) - len(row))
-            for row in values[1:]
-        ]
-
+            return pd.DataFrame(columns=TRANSACTION_COLUMNS)
         log.info(f" Retrieved {len(values)-1} transaction records")
-        return pd.DataFrame(normalized_rows, columns=columns)
+        return normalize_transactions_dataframe(values)
     except Exception as e:
         log.error(f"❌ Failed to fetch transactions data: {str(e)}")
         raise
@@ -375,11 +408,7 @@ def show_overview_analytics(df, start_date, end_date):
         return
 
     total_expense = expense_df['Amount'].sum()
-    normalized_users = expense_df['User'].fillna('').str.strip().str.lower()
-    user_balances = {
-        USER_DISPLAY_NAMES['marconigris']: expense_df[normalized_users == 'marconigris']['Amount'].sum(),
-        USER_DISPLAY_NAMES['monigila']: expense_df[normalized_users == 'monigila']['Amount'].sum(),
-    }
+    user_balances = calculate_user_balances(expense_df)
     settlement_message = build_settlement_message(user_balances)
     
     render_overview_cards(user_balances, total_expense, settlement_message)
@@ -407,7 +436,7 @@ def show_overview_analytics(df, start_date, end_date):
     st.subheader("Recent Transactions")
     recent_df = expense_df.sort_values('Date', ascending=False).head(5)
     st.dataframe(
-        recent_df[['Date', 'Type', 'Category', 'Subcategory', 'Amount', 'Description']].style.format({
+        recent_df[['Date', 'Category', 'Amount', 'Description', 'User']].style.format({
             'Amount': format_currency,
             'Date': lambda x: x.strftime('%Y-%m-%d')
         }),
@@ -489,14 +518,6 @@ def show_expense_analytics(df, start_date, end_date):
             use_container_width=True,
             height=300
         )
-    
-    # Subcategory Analysis
-    st.subheader("Expenses by Subcategory")
-    subcategory_expenses = expense_df.groupby('Subcategory')['Amount'].sum().sort_values(ascending=False)
-    fig_subcategory = px.bar(subcategory_expenses,
-                            title='Expenses by Subcategory',
-                            labels={'value': 'Amount ($)', 'index': 'Subcategory'})
-    st.plotly_chart(fig_subcategory)
     
     # Daily Average Spending
     avg_daily = expense_df.groupby(expense_df['Date'].dt.strftime('%Y-%m'))['Amount'].sum() / 30

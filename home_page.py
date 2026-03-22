@@ -13,6 +13,11 @@ from config.constants import CATEGORIES
 
 log = setup_logging("expense_tracker_home")
 
+USER_DISPLAY_NAMES = {
+    "marconigris": "Marco",
+    "monigila": "Moni",
+}
+
 
 # ---------- UI HELPERS ----------
 
@@ -24,6 +29,24 @@ def _render_currency_selector() -> str:
         default="USD",
         selection_mode="single",
         key="expense_currency",
+    )
+
+
+def _render_split_summary(marco_share: int, moni_share: int) -> None:
+    st.markdown(
+        f"""
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.75rem;margin-top:0.4rem;">
+            <div style="border-radius:1rem;padding:0.9rem;background:#ffffff;border:1px solid rgba(15,23,42,0.08);">
+                <div style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.65;">Marco</div>
+                <div style="font-size:1.25rem;font-weight:800;letter-spacing:-0.03em;">{marco_share}%</div>
+            </div>
+            <div style="border-radius:1rem;padding:0.9rem;background:#ffffff;border:1px solid rgba(15,23,42,0.08);">
+                <div style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.65;">Moni</div>
+                <div style="font-size:1.25rem;font-weight:800;letter-spacing:-0.03em;">{moni_share}%</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
 
@@ -83,7 +106,8 @@ def _render_mobile_form_styles() -> None:
         div[data-testid="stNumberInput"],
         div[data-testid="stTextInput"],
         div[data-testid="stSelectbox"],
-        div[data-testid="stSegmentedControl"] {
+        div[data-testid="stSegmentedControl"],
+        div[data-testid="stCheckbox"] {
             padding-top: 0.25rem;
         }
 
@@ -106,6 +130,17 @@ def _render_mobile_form_styles() -> None:
             border: none;
             font-weight: 700;
             box-shadow: 0 14px 26px rgba(15, 23, 42, 0.16);
+        }
+
+        details {
+            border-radius: 1.1rem;
+            background: rgba(255, 255, 255, 0.76);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            padding: 0.35rem 0.8rem;
+        }
+
+        details summary {
+            font-weight: 700;
         }
 
         div[data-testid="stNumberInput"] input::-webkit-outer-spin-button,
@@ -181,7 +216,7 @@ def render_add_expense_form() -> None:
         with col2:
             currency = _render_currency_selector()
 
-        col3, col4 = st.columns(2, gap="medium")
+        col3, col4 = st.columns([1, 1.1], gap="medium")
         with col3:
             category = st.selectbox(
                 "Category",
@@ -189,23 +224,41 @@ def render_add_expense_form() -> None:
                 key="expense_category",
             )
 
-        with col4:
-            subcategory = st.selectbox(
-                "Subcategory",
-                expense_categories[category],
-                key="expense_subcategory",
-            )
-
         description = st.text_input(
             "Description",
             placeholder="e.g., Groceries, Gas, Coffee"
         )
+
+        normalized_user = username.strip().lower() if username else ""
+        with st.expander("Split details (optional)", expanded=False):
+            shared_expense = st.checkbox("Shared expense", value=False, key="shared_expense")
+            if shared_expense:
+                marco_share = st.slider("Marco share", min_value=0, max_value=100, value=50, key="marco_share")
+                moni_share = 100 - marco_share
+                _render_split_summary(marco_share, moni_share)
+            elif normalized_user == "marconigris":
+                marco_share = 100
+                moni_share = 0
+            elif normalized_user == "monigila":
+                marco_share = 0
+                moni_share = 100
+            else:
+                marco_share = 0
+                moni_share = 0
         
         submitted = st.form_submit_button("✅ Add Expense", use_container_width=True)
         
         if submitted:
             if amount and amount > 0 and description and username:
-                _save_expense(amount, description, currency, category, subcategory, username)
+                _save_expense(
+                    amount,
+                    description,
+                    currency,
+                    category,
+                    username,
+                    marco_share,
+                    moni_share,
+                )
             elif amount is None:
                 st.error("Please enter an amount")
             elif amount == 0:
@@ -223,8 +276,9 @@ def _save_expense(
     description: str,
     currency: str,
     category: str,
-    subcategory: str,
     user: str,
+    marco_share: int,
+    moni_share: int,
 ) -> None:
     """Save expense to Google Sheets with currency conversion."""
     try:
@@ -238,11 +292,12 @@ def _save_expense(
             round(usd_amount, 2),          # Amount (converted to USD)
             "Expense",                     # Type (default)
             category,                      # Category
-            subcategory,                   # Subcategory
             description,                   # Description
             amount,                        # Currency Amount (original input)
             currency,                      # Currency
-            user                           # User
+            user,                          # User
+            marco_share,                   # Marco Split %
+            moni_share,                    # Moni Split %
         ]]
         
         log.info(
@@ -252,7 +307,8 @@ def _save_expense(
         
         append_transactions("Expenses", values)
         
-        msg = f"✅ Saved {category} / {subcategory}: {currency} {amount:.2f} ({format_usd(usd_amount)})"
+        split_note = f" Split: Marco {marco_share}% / Moni {moni_share}%." if (marco_share, moni_share) not in {(100, 0), (0, 100)} else ""
+        msg = f"✅ Saved {category}: {currency} {amount:.2f} ({format_usd(usd_amount)}).{split_note}"
         log.info(f"Successfully saved expense: {msg}")
         st.success(msg)
     except ValueError as e:
