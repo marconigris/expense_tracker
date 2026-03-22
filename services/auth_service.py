@@ -17,12 +17,19 @@ CREDENTIALS_PATH = Path(__file__).parent.parent / "config" / "auth_users.yaml"
 
 def load_authenticator():
     """
-    Load the authenticator with user credentials.
+    Load the authenticator with user credentials from secrets or file.
     """
     try:
-        # Load credentials from file
-        with open(CREDENTIALS_PATH) as file:
-            config = yaml.safe_load(file)
+        # Try to load from Streamlit secrets first (production)
+        if 'credentials' in st.secrets:
+            config = {
+                'credentials': st.secrets['credentials'],
+                'cookie': st.secrets['cookie']
+            }
+        else:
+            # Fallback to file (local development)
+            with open(CREDENTIALS_PATH) as file:
+                config = yaml.safe_load(file)
         
         # Initialize authenticator
         authenticator = stauth.Authenticate(
