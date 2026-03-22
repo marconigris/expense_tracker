@@ -25,7 +25,7 @@ def render_add_expense_form() -> None:
     
     with st.form(key="add_expense_form", clear_on_submit=True):
         # Row 0: Amount (0,0) and Currency (0,1)
-        col1, col2 = st.columns(2, gap="small")
+        col1, col2 = st.columns([1, 1], gap="medium")
         
         with col1:
             amount = st.number_input(
@@ -37,10 +37,10 @@ def render_add_expense_form() -> None:
             )
         
         with col2:
-            currency = st.radio(
+            currency = st.selectbox(
                 "Currency",
                 ["USD", "EUR", "DOP"],
-                horizontal=False
+                label_visibility="visible"
             )
         
         # Row 1: Description (1,0) and (1,1) - spans both columns
