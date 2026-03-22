@@ -27,6 +27,18 @@ def _render_currency_selector() -> str:
     )
 
 
+def _parse_amount(raw_amount: str) -> float | None:
+    """Parse a user-entered amount, allowing either dot or comma decimals."""
+    cleaned = raw_amount.strip().replace(",", ".")
+    if not cleaned:
+        return None
+
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
 def render_add_expense_form() -> None:
     """Render the form to add a new expense."""
     st.subheader("Add Expense")
@@ -35,22 +47,19 @@ def render_add_expense_form() -> None:
     username = get_authenticated_username()
     
     with st.form(key="add_expense_form", clear_on_submit=True):
-        # Row 0: Amount (0,0) and Currency (0,1)
-        col1, col2 = st.columns([1, 1], gap="medium")
+        # Row 0: Amount and Currency
+        col1, col2 = st.columns([0.7, 1.3], gap="medium")
         
         with col1:
-            amount = st.number_input(
+            amount_raw = st.text_input(
                 "Amount",
-                value=None,
-                step=0.01,
-                format="%.2f",
                 placeholder="Enter amount"
             )
         
         with col2:
             currency = _render_currency_selector()
         
-        # Row 1: Description (1,0) and (1,1) - spans both columns
+        # Row 1: Description
         description = st.text_input(
             "Description",
             placeholder="e.g., Groceries, Gas, Coffee"
@@ -59,9 +68,13 @@ def render_add_expense_form() -> None:
         submitted = st.form_submit_button("✅ Add Expense", use_container_width=True)
         
         if submitted:
+            amount = _parse_amount(amount_raw)
+
             if amount and amount > 0 and description and username:
                 _save_expense(amount, description, currency, username)
-            elif amount is None or amount == 0:
+            elif amount is None:
+                st.error("Please enter a valid amount")
+            elif amount == 0:
                 st.error("Please enter an amount greater than 0")
             elif not description:
                 st.error("Please enter a description")
