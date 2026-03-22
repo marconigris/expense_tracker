@@ -18,11 +18,22 @@ CREDENTIALS_PATH = Path(__file__).parent.parent / "config" / "auth_users.yaml"
 def _convert_to_dict(obj):
     """
     Recursively convert Streamlit secret objects to plain dicts.
+    Handles Streamlit's __nested_secrets__ structure.
     """
+    # Handle Streamlit's nested secrets structure
+    if hasattr(obj, '_secrets'):
+        return _convert_to_dict(obj._secrets)
+    
+    if hasattr(obj, '__nested_secrets__'):
+        nested = getattr(obj, '__nested_secrets__', {})
+        if isinstance(nested, dict):
+            return _convert_to_dict(nested)
+        return nested
+    
     if isinstance(obj, dict):
         return {k: _convert_to_dict(v) for k, v in obj.items()}
     elif hasattr(obj, '__dict__'):
-        return _convert_to_dict(obj.__dict__)
+        return _convert_to_dict(vars(obj))
     elif isinstance(obj, (list, tuple)):
         return type(obj)(_convert_to_dict(item) for item in obj)
     else:
@@ -39,29 +50,26 @@ def load_authenticator():
         # Try to load from Streamlit secrets first (production)
         if 'credentials' in st.secrets:
             try:
-                # Convert Streamlit secrets to plain dict recursively
-                secrets_dict = _convert_to_dict(dict(st.secrets))
+                # Access and convert each section individually
+                logger.info(f"Attempting to load from secrets")
                 
-                logger.info(f"Secrets loaded. Keys: {list(secrets_dict.keys())}")
+                # Get cookie section
+                cookie_raw = st.secrets.get('cookie')
+                logger.info(f"Cookie type: {type(cookie_raw)}")
                 
-                # Validate structure
-                if 'cookie' not in secrets_dict:
-                    raise KeyError("'cookie' section not found in secrets")
-                if 'credentials' not in secrets_dict:
-                    raise KeyError("'credentials' section not found in secrets")
+                # Convert cookie to dict
+                cookie = _convert_to_dict(cookie_raw)
+                logger.info(f"Converted cookie keys: {list(cookie.keys()) if isinstance(cookie, dict) else 'not a dict'}")
                 
-                cookie = secrets_dict.get('cookie', {})
-                if not isinstance(cookie, dict):
-                    logger.error(f"Cookie is not a dict: {type(cookie)}")
-                    raise ValueError("Cookie must be a dictionary")
+                # Get credentials section  
+                credentials_raw = st.secrets.get('credentials')
+                credentials = _convert_to_dict(credentials_raw)
                 
-                if 'name' not in cookie:
-                    raise KeyError(f"'name' not in cookie. Cookie keys: {list(cookie.keys())}")
-                if 'key' not in cookie:
-                    raise KeyError(f"'key' not in cookie. Cookie keys: {list(cookie.keys())}")
+                if not isinstance(cookie, dict) or 'name' not in cookie or 'key' not in cookie:
+                    raise ValueError(f"Invalid cookie structure: {cookie}")
                 
                 config = {
-                    'credentials': secrets_dict['credentials'],
+                    'credentials': credentials,
                     'cookie': cookie
                 }
                 logger.info("Successfully loaded config from secrets")
@@ -71,6 +79,7 @@ def load_authenticator():
         
         # Fallback to file if secrets failed or not available
         if config is None:
+            logger.info(f"Attempting to load from file: {CREDENTIALS_PATH}")
             with open(CREDENTIALS_PATH) as file:
                 config = yaml.safe_load(file)
             logger.info("Loaded config from file")
