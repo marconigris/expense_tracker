@@ -77,12 +77,13 @@ def initialize_exchange_rates_sheet(service: Any, spreadsheet_id: str) -> None:
         # Setup headers and formulas
         headers = [['Currency', 'Rate to USD']]
         
-        # GOOGLEFINANCE formulas for live exchange rates
-        # Format: =GOOGLEFINANCE("CURRENCY/USD") returns the rate
+        # GOOGLEFINANCE formulas for live exchange rates.
+        # We store "currency units per 1 USD" because convert_to_usd()
+        # divides the input amount by this rate.
         formulas = [
             ['USD', 1.0],
-            ['EUR', '=1/GOOGLEFINANCE("EUR/USD")'],
-            ['DOP', '=1/GOOGLEFINANCE("DOP/USD")'],
+            ['EUR', '=GOOGLEFINANCE("CURRENCY:USDEUR")'],
+            ['DOP', '=GOOGLEFINANCE("CURRENCY:USDDOP")'],
         ]
         
         # Write headers
