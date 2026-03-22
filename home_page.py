@@ -18,6 +18,16 @@ USER_DISPLAY_NAMES = {
     "monigila": "Moni",
 }
 
+EXPENSE_AMOUNT_KEY = "expense_amount"
+EXPENSE_DESCRIPTION_KEY = "expense_description"
+EXPENSE_CATEGORY_KEY = "expense_category"
+EXPENSE_CURRENCY_KEY = "expense_currency"
+SHARED_EXPENSE_KEY = "shared_expense"
+SPLIT_MARCO_AMOUNT_KEY = "split_marco_amount"
+SPLIT_MONI_AMOUNT_KEY = "split_moni_amount"
+LAST_SPLIT_EDITED_KEY = "last_split_edited"
+EXPENSE_SUCCESS_MESSAGE_KEY = "expense_success_message"
+
 
 # ---------- UI HELPERS ----------
 
@@ -32,22 +42,103 @@ def _render_currency_selector() -> str:
     )
 
 
-def _render_split_summary(marco_share: int, moni_share: int) -> None:
-    st.markdown(
-        f"""
-        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.75rem;margin-top:0.4rem;">
-            <div style="border-radius:1rem;padding:0.9rem;background:#ffffff;border:1px solid rgba(15,23,42,0.08);">
-                <div style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.65;">Marco</div>
-                <div style="font-size:1.25rem;font-weight:800;letter-spacing:-0.03em;">{marco_share}%</div>
-            </div>
-            <div style="border-radius:1rem;padding:0.9rem;background:#ffffff;border:1px solid rgba(15,23,42,0.08);">
-                <div style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.65;">Moni</div>
-                <div style="font-size:1.25rem;font-weight:800;letter-spacing:-0.03em;">{moni_share}%</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+def _initialize_expense_state(username: str) -> None:
+    st.session_state.setdefault(EXPENSE_AMOUNT_KEY, None)
+    st.session_state.setdefault(EXPENSE_DESCRIPTION_KEY, "")
+    st.session_state.setdefault(EXPENSE_CATEGORY_KEY, list(CATEGORIES["Expense"].keys())[0])
+    st.session_state.setdefault(EXPENSE_CURRENCY_KEY, "USD")
+    st.session_state.setdefault(SHARED_EXPENSE_KEY, False)
+    st.session_state.setdefault(SPLIT_MARCO_AMOUNT_KEY, 0.0)
+    st.session_state.setdefault(SPLIT_MONI_AMOUNT_KEY, 0.0)
+    st.session_state.setdefault(LAST_SPLIT_EDITED_KEY, "")
+    st.session_state.setdefault(EXPENSE_SUCCESS_MESSAGE_KEY, "")
+    _set_default_split_amounts(username, preserve_manual=False)
+
+
+def _set_default_split_amounts(username: str, preserve_manual: bool = True) -> None:
+    amount = float(st.session_state.get(EXPENSE_AMOUNT_KEY) or 0.0)
+    if preserve_manual and st.session_state.get(SHARED_EXPENSE_KEY):
+        _sync_split_amounts(st.session_state.get(LAST_SPLIT_EDITED_KEY) or "marco")
+        return
+
+    normalized_user = username.strip().lower() if username else ""
+    if st.session_state.get(SHARED_EXPENSE_KEY):
+        st.session_state[SPLIT_MARCO_AMOUNT_KEY] = round(amount / 2, 2)
+        st.session_state[SPLIT_MONI_AMOUNT_KEY] = round(amount - st.session_state[SPLIT_MARCO_AMOUNT_KEY], 2)
+        st.session_state[LAST_SPLIT_EDITED_KEY] = "marco"
+    elif normalized_user == "marconigris":
+        st.session_state[SPLIT_MARCO_AMOUNT_KEY] = round(amount, 2)
+        st.session_state[SPLIT_MONI_AMOUNT_KEY] = 0.0
+        st.session_state[LAST_SPLIT_EDITED_KEY] = "marco"
+    elif normalized_user == "monigila":
+        st.session_state[SPLIT_MARCO_AMOUNT_KEY] = 0.0
+        st.session_state[SPLIT_MONI_AMOUNT_KEY] = round(amount, 2)
+        st.session_state[LAST_SPLIT_EDITED_KEY] = "moni"
+    else:
+        st.session_state[SPLIT_MARCO_AMOUNT_KEY] = 0.0
+        st.session_state[SPLIT_MONI_AMOUNT_KEY] = 0.0
+        st.session_state[LAST_SPLIT_EDITED_KEY] = ""
+
+
+def _sync_split_amounts(edited_field: str) -> None:
+    amount = float(st.session_state.get(EXPENSE_AMOUNT_KEY) or 0.0)
+    marco_amount = float(st.session_state.get(SPLIT_MARCO_AMOUNT_KEY) or 0.0)
+    moni_amount = float(st.session_state.get(SPLIT_MONI_AMOUNT_KEY) or 0.0)
+
+    if edited_field == "marco":
+        marco_amount = min(max(marco_amount, 0.0), amount)
+        moni_amount = round(max(amount - marco_amount, 0.0), 2)
+        marco_amount = round(amount - moni_amount, 2)
+    else:
+        moni_amount = min(max(moni_amount, 0.0), amount)
+        marco_amount = round(max(amount - moni_amount, 0.0), 2)
+        moni_amount = round(amount - marco_amount, 2)
+
+    st.session_state[SPLIT_MARCO_AMOUNT_KEY] = marco_amount
+    st.session_state[SPLIT_MONI_AMOUNT_KEY] = moni_amount
+    st.session_state[LAST_SPLIT_EDITED_KEY] = edited_field
+
+
+def _handle_total_amount_change(username: str) -> None:
+    _set_default_split_amounts(username)
+
+
+def _handle_marco_split_change() -> None:
+    _sync_split_amounts("marco")
+
+
+def _handle_moni_split_change() -> None:
+    _sync_split_amounts("moni")
+
+
+def _handle_shared_toggle(username: str) -> None:
+    _set_default_split_amounts(username, preserve_manual=False)
+
+
+def _get_split_percentages(username: str) -> tuple[int, int]:
+    amount = float(st.session_state.get(EXPENSE_AMOUNT_KEY) or 0.0)
+    if amount <= 0:
+        return (0, 0)
+
+    if not st.session_state.get(SHARED_EXPENSE_KEY):
+        normalized_user = username.strip().lower() if username else ""
+        if normalized_user == "marconigris":
+            return (100, 0)
+        if normalized_user == "monigila":
+            return (0, 100)
+
+    marco_amount = float(st.session_state.get(SPLIT_MARCO_AMOUNT_KEY) or 0.0)
+    marco_share = round((marco_amount / amount) * 100)
+    marco_share = min(max(marco_share, 0), 100)
+    moni_share = 100 - marco_share
+    return (marco_share, moni_share)
+
+
+def _reset_expense_form(username: str) -> None:
+    st.session_state[EXPENSE_AMOUNT_KEY] = None
+    st.session_state[EXPENSE_DESCRIPTION_KEY] = ""
+    st.session_state[SHARED_EXPENSE_KEY] = False
+    _set_default_split_amounts(username, preserve_manual=False)
 
 
 def _render_mobile_form_styles() -> None:
@@ -198,74 +289,93 @@ def render_add_expense_form() -> None:
     # Get username from authenticated session
     username = get_authenticated_username()
     expense_categories = CATEGORIES["Expense"]
+    _initialize_expense_state(username)
+
+    if st.session_state.get(EXPENSE_SUCCESS_MESSAGE_KEY):
+        st.success(st.session_state[EXPENSE_SUCCESS_MESSAGE_KEY])
+        st.session_state[EXPENSE_SUCCESS_MESSAGE_KEY] = ""
     
-    with st.form(key="add_expense_form", clear_on_submit=True):
-        col1, col2 = st.columns([0.7, 1.3], gap="medium")
-        
-        with col1:
-            amount = st.number_input(
-                "Amount",
-                min_value=0.0,
-                value=None,
-                step=0.01,
-                format="%.2f",
-                placeholder="Enter amount",
-            )
-        
-        with col2:
-            currency = _render_currency_selector()
-
-        col3, col4 = st.columns([1, 1.1], gap="medium")
-        with col3:
-            category = st.selectbox(
-                "Category",
-                list(expense_categories.keys()),
-                key="expense_category",
-            )
-
-        description = st.text_input(
-            "Description",
-            placeholder="e.g., Groceries, Gas, Coffee"
+    col1, col2 = st.columns([0.7, 1.3], gap="medium")
+    
+    with col1:
+        amount = st.number_input(
+            "Amount",
+            min_value=0.0,
+            value=st.session_state[EXPENSE_AMOUNT_KEY],
+            step=0.01,
+            format="%.2f",
+            placeholder="Enter amount",
+            key=EXPENSE_AMOUNT_KEY,
+            on_change=_handle_total_amount_change,
+            args=(username,),
         )
 
-        normalized_user = username.strip().lower() if username else ""
-        with st.expander("Split details (optional)", expanded=False):
-            shared_expense = st.checkbox("Shared expense", value=False, key="shared_expense")
-            if shared_expense:
-                marco_share = st.slider("Marco share", min_value=0, max_value=100, value=50, key="marco_share")
-                moni_share = 100 - marco_share
-                _render_split_summary(marco_share, moni_share)
-            elif normalized_user == "marconigris":
-                marco_share = 100
-                moni_share = 0
-            elif normalized_user == "monigila":
-                marco_share = 0
-                moni_share = 100
-            else:
-                marco_share = 0
-                moni_share = 0
-        
-        submitted = st.form_submit_button("✅ Add Expense", use_container_width=True)
-        
-        if submitted:
-            if amount and amount > 0 and description and username:
-                _save_expense(
-                    amount,
-                    description,
-                    currency,
-                    category,
-                    username,
-                    marco_share,
-                    moni_share,
+    with col2:
+        currency = _render_currency_selector()
+
+    st.selectbox(
+        "Category",
+        list(expense_categories.keys()),
+        key=EXPENSE_CATEGORY_KEY,
+    )
+
+    description = st.text_input(
+        "Description",
+        placeholder="e.g., Groceries, Gas, Coffee",
+        key=EXPENSE_DESCRIPTION_KEY,
+    )
+
+    with st.expander("Split details (optional)", expanded=False):
+        st.checkbox(
+            "Shared expense",
+            key=SHARED_EXPENSE_KEY,
+            on_change=_handle_shared_toggle,
+            args=(username,),
+        )
+        if st.session_state[SHARED_EXPENSE_KEY]:
+            split_col1, split_col2 = st.columns(2, gap="medium")
+            with split_col1:
+                st.number_input(
+                    "Marco amount",
+                    min_value=0.0,
+                    step=0.01,
+                    format="%.2f",
+                    key=SPLIT_MARCO_AMOUNT_KEY,
+                    on_change=_handle_marco_split_change,
                 )
-            elif amount is None:
-                st.error("Please enter an amount")
-            elif amount == 0:
-                st.error("Please enter an amount greater than 0")
-            elif not description:
-                st.error("Please enter a description")
-            else:
-                st.error("No user authenticated. Please log in.")
+            with split_col2:
+                st.number_input(
+                    "Moni amount",
+                    min_value=0.0,
+                    step=0.01,
+                    format="%.2f",
+                    key=SPLIT_MONI_AMOUNT_KEY,
+                    on_change=_handle_moni_split_change,
+                )
+
+    if st.button("✅ Add Expense", use_container_width=True):
+        marco_share, moni_share = _get_split_percentages(username)
+
+        if amount and amount > 0 and description and username:
+            _save_expense(
+                amount,
+                description,
+                currency,
+                st.session_state[EXPENSE_CATEGORY_KEY],
+                username,
+                marco_share,
+                moni_share,
+            )
+            _reset_expense_form(username)
+            st.rerun()
+        elif amount is None:
+            st.error("Please enter an amount")
+        elif amount == 0:
+            st.error("Please enter an amount greater than 0")
+        elif not description:
+            st.error("Please enter a description")
+        else:
+            st.error("No user authenticated. Please log in.")
 
     _close_expense_card()
 
@@ -309,7 +419,7 @@ def _save_expense(
         split_note = f" Split: Marco {marco_share}% / Moni {moni_share}%." if (marco_share, moni_share) not in {(100, 0), (0, 100)} else ""
         msg = f"✅ Saved {category}: {currency} {amount:.2f} ({format_usd(usd_amount)}).{split_note}"
         log.info(f"Successfully saved expense: {msg}")
-        st.success(msg)
+        st.session_state[EXPENSE_SUCCESS_MESSAGE_KEY] = msg
     except ValueError as e:
         log.error(f"Currency conversion error: {e}")
         st.error(f"Currency conversion error: {str(e)}")
