@@ -22,10 +22,12 @@ def load_authenticator():
     try:
         # Try to load from Streamlit secrets first (production)
         if 'credentials' in st.secrets:
-            secrets_dict = dict(st.secrets)
+            # Access secrets using getattr to avoid item assignment issues
+            credentials = getattr(st.secrets, 'credentials', None)
+            cookie = getattr(st.secrets, 'cookie', None)
             config = {
-                'credentials': secrets_dict['credentials'],
-                'cookie': secrets_dict['cookie']
+                'credentials': credentials,
+                'cookie': cookie
             }
         else:
             # Fallback to file (local development)
