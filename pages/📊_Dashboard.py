@@ -87,6 +87,20 @@ def normalize_transactions_dataframe(values: list[list[str]]) -> pd.DataFrame:
     return df[TRANSACTION_COLUMNS]
 
 
+def parse_sheet_dates(series: pd.Series) -> pd.Series:
+    """Parse Google Sheets serial dates and regular date strings."""
+    numeric_values = pd.to_numeric(series, errors='coerce')
+    serial_dates = pd.to_datetime(
+        numeric_values,
+        unit='D',
+        origin='1899-12-30',
+        errors='coerce',
+    )
+    text_candidates = series.where(numeric_values.isna())
+    text_dates = pd.to_datetime(text_candidates, errors='coerce')
+    return serial_dates.fillna(text_dates)
+
+
 def render_overview_cards(user_balances: dict[str, float], total_expense: float, settlement_message: str) -> None:
     st.markdown(
         """
@@ -284,8 +298,8 @@ def get_pending_transactions() -> pd.DataFrame:
         df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
         
         # Convert dates
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-        df['Due Date'] = pd.to_datetime(df['Due Date'], errors='coerce')
+        df['Date'] = parse_sheet_dates(df['Date'])
+        df['Due Date'] = parse_sheet_dates(df['Due Date'])
         
         # Drop rows with NaN values
         df = df.dropna(subset=['Amount', 'Type', 'Status'])
@@ -322,7 +336,7 @@ def get_date_filters(key:str="unique_global_filter"):
     df = get_transactions_data(get_current_project())
     if not df.empty:
         df = df.copy()
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        df['Date'] = parse_sheet_dates(df['Date'])
         valid_dates = df['Date'].dropna()
         if valid_dates.empty:
             min_date = max_date = datetime.now()
@@ -397,7 +411,8 @@ def filter_dataframe(df, start_date, end_date):
     if df.empty:
         return df
     
-    df['Date'] = pd.to_datetime(df['Date'])
+    df = df.copy()
+    df['Date'] = parse_sheet_dates(df['Date'])
     return df[(df['Date'] >= start_date) & (df['Date'] <= end_date)]
 
 def show_overview_analytics(df, start_date, end_date):
@@ -668,8 +683,10 @@ def show_analytics():
         # Get and filter data
         df = get_transactions_data(get_current_project())
         if not df.empty:
-            df['Amount'] = pd.to_numeric(df['Amount'])
-            df['Date'] = pd.to_datetime(df['Date'])
+            df = df.copy()
+            df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
+            df['Date'] = parse_sheet_dates(df['Date'])
+            df = df.dropna(subset=['Amount', 'Date'])
             filtered_df = filter_dataframe(df, start_date, end_date)
         else:
             filtered_df = df
