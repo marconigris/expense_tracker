@@ -5,7 +5,7 @@ import datetime as dt
 import streamlit as st
 
 from utils.logging_utils import setup_logging
-from state import get_messages, add_message
+from state import get_messages, add_message, clear_messages
 from bootstrap import ensure_startup, render_global_header
 from services.google_sheets import append_transactions
 from services.auth_service import get_authenticated_username
@@ -105,7 +105,14 @@ def _save_expense(amount: float, description: str, currency: str, user: str) -> 
 
 def render_messages_log() -> None:
     """Render the activity log."""
-    st.subheader("Activity Log")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.subheader("Activity Log")
+    with col2:
+        if st.button("🗑️ Clear", key="clear_log_btn", use_container_width=True):
+            clear_messages()
+            st.rerun()
+    
     messages = get_messages()
     if not messages:
         st.info("No activity yet")
