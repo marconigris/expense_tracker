@@ -74,7 +74,7 @@ def setup_auth_users():
     }
     
     # Write to auth_users.yaml
-    auth_path = Path(__file__).parent / "config" / "auth_users.yaml"
+    auth_path = Path(__file__).parent.parent / "config" / "auth_users.yaml"
     auth_path.parent.mkdir(parents=True, exist_ok=True)
     
     with open(auth_path, 'w') as file:

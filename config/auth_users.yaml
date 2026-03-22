@@ -1,23 +1,12 @@
-credentials:
-  usernames:
-    marco:
-      email: marco@example.com
-      name: Marco
-      password: hashed_password_here  # See instructions to generate
-    juan:
-      email: juan@example.com
-      name: Juan
-      password: hashed_password_here
-    sofia:
-      email: sofia@example.com
-      name: Sofia
-      password: hashed_password_here
-
 cookie:
   expiry_days: 30
-  key: your_secret_key_here
+  key: chetti_expense_tracker_key_2026
   name: chetti_cookie
-
+credentials:
+  usernames:
+    marconigris:
+      email: ''
+      name: Marco
+      password: $2b$12$kErWvW7W7Fa/CSTDQ/yDIeBQsGYva.WnXXkfQcBv0LsijBlcucC7y
 pre-authorized:
-  emails:
-    - admin@example.com
+  emails: []
