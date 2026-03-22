@@ -24,11 +24,13 @@ def render_add_expense_form() -> None:
     username = get_authenticated_username()
     
     with st.form(key="add_expense_form", clear_on_submit=True):
+        # Amount input - empty by default, no min value to allow starting fresh
         amount = st.number_input(
             "Amount",
-            min_value=0.0,
+            value=None,
             step=0.01,
-            format="%.2f"
+            format="%.2f",
+            placeholder="Enter amount"
         )
         
         description = st.text_input(
@@ -45,9 +47,9 @@ def render_add_expense_form() -> None:
         submitted = st.form_submit_button("✅ Add Expense", use_container_width=True)
         
         if submitted:
-            if amount > 0 and description and username:
+            if amount and amount > 0 and description and username:
                 _save_expense(amount, description, currency, username)
-            elif amount == 0:
+            elif amount is None or amount == 0:
                 st.error("Please enter an amount greater than 0")
             elif not description:
                 st.error("Please enter a description")
