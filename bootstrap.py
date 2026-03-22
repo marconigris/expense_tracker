@@ -54,12 +54,9 @@ def get_main_sheet_url() -> Optional[str]:
 def render_global_header() -> None:
     """
     Renderiza elementos comunes en la parte superior:
-    - título
     - saludo con nombre de usuario autenticado
     - enlace al Google Sheet
     """
-    st.title("Chetti Accounting ❤️")
-    
     # Get username from authenticated session
     username = get_authenticated_username()
     
