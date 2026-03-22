@@ -46,10 +46,72 @@ def get_sheets_service():
         raise e
 
 
+def initialize_exchange_rates_sheet(service: Any, spreadsheet_id: str) -> None:
+    """
+    Create and initialize the ExchangeRates sheet with GOOGLEFINANCE formulas.
+    This sheet will fetch live exchange rates from Google Finance.
+    """
+    try:
+        # Get existing sheets
+        sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+        sheets = sheet_metadata.get('sheets', [])
+        existing_sheets = {s.get("properties", {}).get("title") for s in sheets}
+        
+        # Create sheet if it doesn't exist
+        if 'ExchangeRates' not in existing_sheets:
+            logger.info("Creating ExchangeRates sheet...")
+            body = {
+                'requests': [{
+                    'addSheet': {
+                        'properties': {
+                            'title': 'ExchangeRates'
+                        }
+                    }
+                }]
+            }
+            service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body=body
+            ).execute()
+        
+        # Setup headers and formulas
+        headers = [['Currency', 'Rate to USD']]
+        
+        # GOOGLEFINANCE formulas for live exchange rates
+        # Format: =GOOGLEFINANCE("CURRENCY/USD") returns the rate
+        formulas = [
+            ['USD', 1.0],
+            ['EUR', '=1/GOOGLEFINANCE("EUR/USD")'],
+            ['DOP', '=1/GOOGLEFINANCE("DOP/USD")'],
+        ]
+        
+        # Write headers
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range='ExchangeRates!A1:B1',
+            valueInputOption='RAW',
+            body={'values': headers}
+        ).execute()
+        
+        # Write formulas
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range='ExchangeRates!A2:B4',
+            valueInputOption='USER_ENTERED',
+            body={'values': formulas}
+        ).execute()
+        
+        logger.info("ExchangeRates sheet initialized with GOOGLEFINANCE formulas")
+        
+    except Exception as e:
+        logger.error(f"Error initializing ExchangeRates sheet: {e}")
+        # Don't raise - this is not critical
+
+
 def verify_sheets_setup() -> None:
     """
     Verify and initialize Google Sheets with correct headers.
-    Creates or updates the Expenses sheet for the simplified format.
+    Creates or updates the Expenses sheet and initializes exchange rates.
     """
     try:
         service = get_sheets_service()
@@ -85,11 +147,11 @@ def verify_sheets_setup() -> None:
                 body=body
             ).execute()
         
-        # Set headers for simplified format
-        headers = [['Date', 'Amount', 'Currency', 'Description']]
+        # Set headers for full format (for dashboard compatibility)
+        headers = [['Date', 'Amount', 'Type', 'Category', 'Subcategory', 'Description', 'Currency Amount', 'Currency']]
         result = service.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,
-            range='Expenses!A1:D1'
+            range='Expenses!A1:H1'
         ).execute()
         
         current_headers = result.get('values', [])
@@ -99,10 +161,13 @@ def verify_sheets_setup() -> None:
             logger.info("Setting up Expenses sheet headers...")
             service.spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id,
-                range='Expenses!A1:D1',
+                range='Expenses!A1:H1',
                 valueInputOption='RAW',
                 body={'values': headers}
             ).execute()
+        
+        # Initialize ExchangeRates sheet
+        initialize_exchange_rates_sheet(service, spreadsheet_id)
         
         logger.info("Google Sheets setup verified")
     except Exception as e:
@@ -144,7 +209,7 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
     
     # Ensure range_name specifies just the columns, not rows (let Google Sheets find next empty row)
     if "!" not in range_name:
-        range_name = f"{range_name}!A:D"  # Only columns A-D for our 4 fields
+        range_name = f"{range_name}!A:H"  # Columns A-H for full schema
 
     try:
         logger.info(f"Appending transactions to range: {range_name}")

@@ -8,6 +8,7 @@ from utils.logging_utils import setup_logging
 from state import get_messages, add_message
 from bootstrap import ensure_startup, render_global_header
 from services.google_sheets import append_transactions
+from config.exchange_rates import convert_to_usd
 
 log = setup_logging("expense_tracker_home")
 
@@ -49,19 +50,40 @@ def render_add_expense_form() -> None:
 
 
 def _save_expense(amount: float, description: str, currency: str) -> None:
-    """Save expense to Google Sheets."""
+    """Save expense to Google Sheets with currency conversion."""
     try:
         today = dt.date.today().isoformat()
-        values = [[today, amount, currency, description]]
         
-        log.info(f"Saving expense - Date: {today}, Amount: {amount}, Currency: {currency}, Description: {description}")
+        # Convert the input amount to USD
+        usd_amount = convert_to_usd(amount, currency)
+        
+        # Full row: Date, Amount (USD), Type, Category, Subcategory, Description, Currency Amount, Currency
+        # Type, Category, Subcategory are defaults since simplified form doesn't include them
+        values = [[
+            today,                          # Date
+            round(usd_amount, 2),          # Amount (converted to USD)
+            "Expense",                     # Type (default)
+            "Other",                       # Category (default)
+            "Miscellaneous",              # Subcategory (default)
+            description,                   # Description
+            amount,                        # Currency Amount (original input)
+            currency                       # Currency
+        ]]
+        
+        log.info(
+            f"Saving expense - Date: {today}, Amount: {amount} {currency} "
+            f"(${usd_amount:.2f} USD), Description: {description}"
+        )
         
         append_transactions("Expenses", values)
         
-        msg = f"✅ Expense saved: {currency} {amount} - {description}"
+        msg = f"✅ Expense saved: {currency} {amount} (${usd_amount:.2f} USD) - {description}"
         log.info(f"Successfully saved expense: {msg}")
         add_message("assistant", msg)
         st.success(msg)
+    except ValueError as e:
+        log.error(f"Currency conversion error: {e}")
+        st.error(f"Currency conversion error: {str(e)}")
     except Exception as e:
         log.error(f"Failed to save expense: {e}", exc_info=True)
         st.error(f"Failed to save expense: {str(e)}")
