@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Path to credentials file
 CREDENTIALS_PATH = Path(__file__).parent.parent / "config" / "auth_users.yaml"
-AUTHENTICATOR_KEY = "_authenticator_instance"
+_AUTHENTICATOR = None
 
 
 def _convert_to_dict(obj):
@@ -81,23 +81,22 @@ def _load_auth_config():
 
 def load_authenticator():
     """
-    Load and reuse a single authenticator instance per Streamlit session.
+    Load and reuse a single authenticator instance per Python process.
     This avoids duplicate CookieManager components with the same key.
     """
     try:
-        authenticator = st.session_state.get(AUTHENTICATOR_KEY)
-        if authenticator is not None:
-            return authenticator
+        global _AUTHENTICATOR
+        if _AUTHENTICATOR is not None:
+            return _AUTHENTICATOR
 
         config = _load_auth_config()
-        authenticator = stauth.Authenticate(
+        _AUTHENTICATOR = stauth.Authenticate(
             config['credentials'],
             config['cookie']['name'],
             config['cookie']['key'],
             config['cookie']['expiry_days']
         )
-        st.session_state[AUTHENTICATOR_KEY] = authenticator
-        return authenticator
+        return _AUTHENTICATOR
     except FileNotFoundError:
         logger.error(f"Credentials file not found at {CREDENTIALS_PATH}")
         raise
