@@ -25,6 +25,105 @@ USER_DISPLAY_NAMES = {
 }
 
 
+def render_overview_cards(user_balances: dict[str, float], total_expense: float, settlement_message: str) -> None:
+    st.markdown(
+        """
+        <style>
+        .overview-stack {
+            display: grid;
+            gap: 0.85rem;
+            margin: 0.5rem 0 1rem;
+        }
+
+        .overview-pair {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.85rem;
+        }
+
+        .overview-card {
+            border-radius: 1.4rem;
+            padding: 1rem 1rem 1.05rem;
+            background: linear-gradient(180deg, #ffffff 0%, #f4f6fb 100%);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+        }
+
+        .overview-card.primary {
+            background: linear-gradient(180deg, #101828 0%, #1f2937 100%);
+            color: #f8fafc;
+            border: none;
+        }
+
+        .overview-card.accent {
+            background: linear-gradient(180deg, #eef6ff 0%, #dbeafe 100%);
+            border: 1px solid rgba(37, 99, 235, 0.12);
+        }
+
+        .overview-label {
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            opacity: 0.68;
+            margin-bottom: 0.45rem;
+        }
+
+        .overview-value {
+            font-size: 1.7rem;
+            line-height: 1.05;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+        }
+
+        .overview-note {
+            font-size: 1rem;
+            line-height: 1.35;
+            font-weight: 600;
+        }
+
+        @media (max-width: 640px) {
+            .overview-card {
+                border-radius: 1.2rem;
+                padding: 0.95rem;
+            }
+
+            .overview-value {
+                font-size: 1.45rem;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"""
+        <div class="overview-stack">
+            <div class="overview-pair">
+                <div class="overview-card">
+                    <div class="overview-label">Marco</div>
+                    <div class="overview-value">{format_currency(user_balances["Marco"])}</div>
+                </div>
+                <div class="overview-card">
+                    <div class="overview-label">Moni</div>
+                    <div class="overview-value">{format_currency(user_balances["Moni"])}</div>
+                </div>
+            </div>
+            <div class="overview-card primary">
+                <div class="overview-label">Total Expenses</div>
+                <div class="overview-value">{format_currency(total_expense)}</div>
+            </div>
+            <div class="overview-card accent">
+                <div class="overview-label">Settlement</div>
+                <div class="overview-note">{settlement_message}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def build_settlement_message(user_balances: dict[str, float]) -> str:
     marco_total = user_balances["Marco"]
     moni_total = user_balances["Moni"]
@@ -283,15 +382,7 @@ def show_overview_analytics(df, start_date, end_date):
     }
     settlement_message = build_settlement_message(user_balances)
     
-    # Display key metrics
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Marco", format_currency(user_balances['Marco']), delta=None)
-    with col2:
-        st.metric("Moni", format_currency(user_balances['Moni']), delta=None)
-
-    st.metric("Total Expenses", format_currency(total_expense), delta=None)
-    st.caption(settlement_message)
+    render_overview_cards(user_balances, total_expense, settlement_message)
     
     # Monthly Summary
     st.subheader("Monthly Summary")
