@@ -14,6 +14,10 @@ log = setup_logging("expense_tracker_analytics")
 
 st.set_page_config (layout='wide')
 
+
+def format_currency(amount: float) -> str:
+    return f"${amount:,.2f}"
+
 # Load environment variables
 load_dotenv()
 
@@ -207,7 +211,7 @@ def filter_dataframe(df, start_date, end_date):
     return df[(df['Date'] >= start_date) & (df['Date'] <= end_date)]
 
 def show_overview_analytics(df, start_date, end_date):
-    st.subheader("📈 Financial Overview")
+    st.subheader("📈 Expense Overview")
     if df.empty:
         st.info("No transactions found for the selected period.")
         return
@@ -218,44 +222,38 @@ def show_overview_analytics(df, start_date, end_date):
     # Display selected period
     # st.caption(f"Showing data from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
     
-    # Calculate key metrics
-    total_income = df[df['Type'] == 'Income']['Amount'].sum()
-    total_expense = df[df['Type'] == 'Expense']['Amount'].sum()
-    net_savings = total_income - total_expense
-    saving_rate = (net_savings / total_income * 100) if total_income > 0 else 0
+    expense_df = df[df['Type'] == 'Expense'].copy()
+    if expense_df.empty:
+        st.info("No expense transactions found for the selected period.")
+        return
+
+    total_expense = expense_df['Amount'].sum()
+    avg_expense = expense_df['Amount'].mean()
+    total_transactions = len(expense_df)
     
     # Display key metrics
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Total Income", f"Rs. {total_income:,.2f}", delta=None)
+        st.metric("Total Expenses", format_currency(total_expense), delta=None)
     with col2:
-        st.metric("Total Expenses", f"Rs. {total_expense:,.2f}", delta=None)
+        st.metric("Average Expense", format_currency(avg_expense), delta=None)
     with col3:
-        st.metric("Net Savings", f"Rs. {net_savings:,.2f}", 
-                 delta=f"Rs. {net_savings:,.2f}",
-                 delta_color="normal" if net_savings >= 0 else "inverse")
-    with col4:
-        st.metric("Saving Rate", f"{saving_rate:.1f}%",
-                 delta=None)
+        st.metric("Transactions", f"{total_transactions}", delta=None)
     
     # Monthly Summary
     st.subheader("Monthly Summary")
-    monthly_summary = df.groupby([df['Date'].dt.strftime('%Y-%m'), 'Type'])['Amount'].sum().unstack(fill_value=0)
-    monthly_summary['Net'] = monthly_summary.get('Income', 0) - monthly_summary.get('Expense', 0)
+    monthly_summary = expense_df.groupby(expense_df['Date'].dt.strftime('%Y-%m'))['Amount'].sum().to_frame('Expense')
     
     # Monthly trend chart
     fig_monthly = px.bar(monthly_summary, 
-                        title='Monthly Income vs Expenses',
-                        barmode='group',
-                        labels={'value': 'Amount (Rs.)', 'index': 'Month'})
+                        title='Monthly Expenses',
+                        labels={'value': 'Amount ($)', 'index': 'Month'})
     st.plotly_chart(fig_monthly)
     
     # Show monthly summary table
     st.dataframe(
         monthly_summary.style.format({
-            'Income': 'Rs. {:,.2f}',
-            'Expense': 'Rs. {:,.2f}',
-            'Net': 'Rs. {:,.2f}'
+            'Expense': format_currency
         }),
         use_container_width=True,
         height=200
@@ -263,33 +261,20 @@ def show_overview_analytics(df, start_date, end_date):
     
     # Recent Transactions
     st.subheader("Recent Transactions")
-    recent_df = df.sort_values('Date', ascending=False).head(5)
+    recent_df = expense_df.sort_values('Date', ascending=False).head(5)
     st.dataframe(
         recent_df[['Date', 'Type', 'Category', 'Subcategory', 'Amount', 'Description']].style.format({
-            'Amount': 'Rs. {:,.2f}',
+            'Amount': format_currency,
             'Date': lambda x: x.strftime('%Y-%m-%d')
         }),
         hide_index=True
     )
     
-    # Category-wise Summary
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Top Income Categories")
-        income_by_category = df[df['Type'] == 'Income'].groupby('Category')['Amount'].sum().sort_values(ascending=False).head(5)
-        fig_income = px.pie(values=income_by_category.values, 
-                          names=income_by_category.index,
-                          title='Top Income Sources')
-        st.plotly_chart(fig_income)
-    
-    with col2:
-        st.subheader("Top Expense Categories")
-        expense_by_category = df[df['Type'] == 'Expense'].groupby('Category')['Amount'].sum().sort_values(ascending=False).head(5)
-        fig_expense = px.pie(values=expense_by_category.values, 
-                           names=expense_by_category.index,
-                           title='Top Expense Categories')
-        st.plotly_chart(fig_expense)
+    expense_by_category = expense_df.groupby('Category')['Amount'].sum().sort_values(ascending=False).head(5)
+    fig_expense = px.pie(values=expense_by_category.values,
+                       names=expense_by_category.index,
+                       title='Top Expense Categories')
+    st.plotly_chart(fig_expense)
     
     # Add Spending Patterns Analysis
     st.subheader("💡 Spending Insights")
@@ -297,95 +282,27 @@ def show_overview_analytics(df, start_date, end_date):
     
     with col1:
         # Weekday vs Weekend spending
-        df['Day_Type'] = df['Date'].dt.dayofweek.map(lambda x: 'Weekend' if x >= 5 else 'Weekday')
-        daily_avg = df[df['Type'] == 'Expense'].groupby('Day_Type')['Amount'].agg(['sum', 'count'])
+        expense_df['Day_Type'] = expense_df['Date'].dt.dayofweek.map(lambda x: 'Weekend' if x >= 5 else 'Weekday')
+        daily_avg = expense_df.groupby('Day_Type')['Amount'].agg(['sum', 'count'])
         daily_avg['avg'] = daily_avg['sum'] / daily_avg['count']
         
         st.caption("Weekday vs Weekend Spending")
         st.dataframe(
             daily_avg.style.format({
-                'sum': 'Rs. {:,.2f}',
-                'avg': 'Rs. {:,.2f}/day'
+                'sum': format_currency,
+                'avg': lambda x: f"{format_currency(x)}/day"
             })
         )
     
     with col2:
         # Week of month analysis
-        df['Week_of_Month'] = df['Date'].dt.day.map(lambda x: (x-1)//7 + 1)
-        weekly_spending = df[df['Type'] == 'Expense'].groupby('Week_of_Month')['Amount'].mean()
+        expense_df['Week_of_Month'] = expense_df['Date'].dt.day.map(lambda x: (x-1)//7 + 1)
+        weekly_spending = expense_df.groupby('Week_of_Month')['Amount'].mean()
         
         fig_weekly = px.bar(weekly_spending,
                           title='Average Spending by Week of Month',
-                          labels={'value': 'Amount (Rs.)', 'Week_of_Month': 'Week'})
+                          labels={'value': 'Amount ($)', 'Week_of_Month': 'Week'})
         st.plotly_chart(fig_weekly)
-
-def show_income_analytics(df, start_date, end_date):
-    st.subheader("💰 Income Analytics")
-    income_df = df[df['Type'] == 'Income'].copy()
-    if income_df.empty:
-        st.info("No income transactions found for the selected period.")
-        return
-    
-    # Filter data
-    df = filter_dataframe(df, start_date, end_date)
-    
-    # Display selected period
-    # st.caption(f"Showing data from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
-    
-    # Monthly Income Trend
-    monthly_income = income_df.groupby(income_df['Date'].dt.strftime('%Y-%m'))['Amount'].sum()
-    fig_monthly = px.bar(monthly_income, 
-                        title='Monthly Income Trend',
-                        labels={'value': 'Amount (Rs.)', 'index': 'Month'})
-    st.plotly_chart(fig_monthly)
-    
-    # Category Analysis
-    col1, col2 = st.columns(2)
-    with col1:
-        # Category Breakdown
-        fig_category = px.pie(income_df, 
-                            values='Amount', 
-                            names='Category',
-                            title='Income by Category')
-        st.plotly_chart(fig_category)
-    
-    with col2:
-        # Top Income Sources
-        st.subheader("Top Income Sources")
-        top_sources = income_df.groupby('Category')['Amount'].sum().sort_values(ascending=False)
-        st.dataframe(
-            top_sources.to_frame().style.format({
-                'Amount': 'Rs. {:,.2f}'
-            }),
-            use_container_width=True,
-            height=300
-        )
-    
-    # Subcategory Analysis
-    st.subheader("Income by Subcategory")
-    subcategory_income = income_df.groupby('Subcategory')['Amount'].sum().sort_values(ascending=False)
-    fig_subcategory = px.bar(subcategory_income,
-                            title='Income by Subcategory',
-                            labels={'value': 'Amount (Rs.)', 'index': 'Subcategory'})
-    st.plotly_chart(fig_subcategory)
-    
-    # Add Income Stability Analysis
-    st.subheader("💰 Income Stability Analysis")
-    monthly_income = df[df['Type'] == 'Income'].groupby(df['Date'].dt.strftime('%Y-%m'))['Amount'].sum()
-    
-    income_stats = {
-        'Average Monthly Income': monthly_income.mean(),
-        'Income Volatility': monthly_income.std() / monthly_income.mean(),
-        'Highest Income Month': monthly_income.max(),
-        'Lowest Income Month': monthly_income.min(),
-        'Months with Income': len(monthly_income)
-    }
-    
-    st.dataframe(
-        pd.Series(income_stats).to_frame('Value').style.format({
-            'Value': lambda x: f"Rs. {x:,.2f}" if isinstance(x, (int, float)) and x > 100 else f"{x:.2%}" if isinstance(x, float) else x
-        }) # type: ignore
-    )
 
 def show_expense_analytics(df, start_date, end_date):
     st.subheader("💸 Expense Analytics")
@@ -404,7 +321,7 @@ def show_expense_analytics(df, start_date, end_date):
     monthly_expense = expense_df.groupby(expense_df['Date'].dt.strftime('%Y-%m'))['Amount'].sum()
     fig_monthly = px.bar(monthly_expense, 
                         title='Monthly Expense Trend',
-                        labels={'value': 'Amount (Rs.)', 'index': 'Month'})
+                        labels={'value': 'Amount ($)', 'index': 'Month'})
     st.plotly_chart(fig_monthly)
     
     # Category Analysis
@@ -423,7 +340,7 @@ def show_expense_analytics(df, start_date, end_date):
         top_expenses = expense_df.groupby('Category')['Amount'].sum().sort_values(ascending=False)
         st.dataframe(
             top_expenses.to_frame().style.format({
-                'Amount': 'Rs. {:,.2f}'
+                'Amount': format_currency
             }),
             use_container_width=True,
             height=300
@@ -434,7 +351,7 @@ def show_expense_analytics(df, start_date, end_date):
     subcategory_expenses = expense_df.groupby('Subcategory')['Amount'].sum().sort_values(ascending=False)
     fig_subcategory = px.bar(subcategory_expenses,
                             title='Expenses by Subcategory',
-                            labels={'value': 'Amount (Rs.)', 'index': 'Subcategory'})
+                            labels={'value': 'Amount ($)', 'index': 'Subcategory'})
     st.plotly_chart(fig_subcategory)
     
     # Daily Average Spending
@@ -442,7 +359,7 @@ def show_expense_analytics(df, start_date, end_date):
     st.subheader("Average Daily Spending by Month")
     st.dataframe(
         avg_daily.to_frame().style.format({
-            'Amount': 'Rs. {:,.2f}'
+            'Amount': format_currency
         })
     )
     
@@ -461,8 +378,8 @@ def show_expense_analytics(df, start_date, end_date):
         st.caption("Fixed Expenses (Low Variation)")
         st.dataframe(
             fixed_expenses.style.format({
-                'mean': 'Rs. {:,.2f}',
-                'std': 'Rs. {:,.2f}',
+                'mean': format_currency,
+                'std': format_currency,
                 'variation': '{:.2%}'
             })
         )
@@ -471,8 +388,8 @@ def show_expense_analytics(df, start_date, end_date):
         st.caption("Variable Expenses (High Variation)")
         st.dataframe(
             variable_expenses.style.format({
-                'mean': 'Rs. {:,.2f}',
-                'std': 'Rs. {:,.2f}',
+                'mean': format_currency,
+                'std': format_currency,
                 'variation': '{:.2%}'
             })
         )
@@ -507,17 +424,17 @@ def show_pending_transactions():
         
         with col1:
             total_to_receive = to_receive['Amount'].sum()
-            st.metric("To Receive", f"Rs. {total_to_receive:,.2f}")
+            st.metric("To Receive", format_currency(total_to_receive))
             
         with col2:
             total_to_pay = to_pay['Amount'].sum()
-            st.metric("To Pay", f"Rs. {total_to_pay:,.2f}")
+            st.metric("To Pay", format_currency(total_to_pay))
             
         with col3:
             net_pending = total_to_receive - total_to_pay
             st.metric("Net Pending", 
-                     f"Rs. {net_pending:,.2f}",
-                     delta=f"Rs. {net_pending:,.2f}",
+                     format_currency(net_pending),
+                     delta=format_currency(net_pending),
                      delta_color="normal" if net_pending >= 0 else "inverse")
         
         st.divider()
@@ -530,7 +447,7 @@ def show_pending_transactions():
             else:
                 st.write("### Pending Receipts")
                 # Format amount with currency
-                to_receive['Amount'] = to_receive['Amount'].apply(lambda x: f"Rs. {x:,.2f}")
+                to_receive['Amount'] = to_receive['Amount'].apply(format_currency)
                 # Format dates
                 to_receive['Date'] = to_receive['Date'].dt.strftime('%Y-%m-%d')
                 to_receive['Due Date'] = to_receive['Due Date'].dt.strftime('%Y-%m-%d')
@@ -545,7 +462,7 @@ def show_pending_transactions():
             else:
                 st.write("### Pending Payments")
                 # Format amount with currency
-                to_pay['Amount'] = to_pay['Amount'].apply(lambda x: f"Rs. {x:,.2f}")
+                to_pay['Amount'] = to_pay['Amount'].apply(format_currency)
                 # Format dates
                 to_pay['Date'] = to_pay['Date'].dt.strftime('%Y-%m-%d')
                 to_pay['Due Date'] = to_pay['Due Date'].dt.strftime('%Y-%m-%d')
@@ -559,8 +476,6 @@ def show_pending_transactions():
 
 def show_analytics():
     try:
-        st.title(" Financial Analytics")
-        
         # Add regenerate button in the header
         col1, col2 = st.columns([6, 1])
         with col2:
@@ -585,15 +500,13 @@ def show_analytics():
         st.caption(f"Showing data from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
         
         # Show tabs for different sections
-        tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Income Analytics", "Expense Analytics", "Pending Transactions"])
+        tab1, tab2, tab3 = st.tabs(["Overview", "Expense Analytics", "Pending Transactions"])
         
         with tab1:
             show_overview_analytics(filtered_df, start_date, end_date)
         with tab2:
-            show_income_analytics(filtered_df, start_date, end_date)
-        with tab3:
             show_expense_analytics(filtered_df, start_date, end_date)
-        with tab4:
+        with tab3:
             show_pending_transactions()
         
         log.info("📊 Analytics visualizations generated successfully")
