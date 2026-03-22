@@ -27,6 +27,7 @@ EXPENSE_CURRENCY_KEY = "expense_currency"
 SPLIT_MARCO_AMOUNT_KEY = "split_marco_amount"
 SPLIT_MONI_AMOUNT_KEY = "split_moni_amount"
 LAST_SPLIT_EDITED_KEY = "last_split_edited"
+SPLIT_MANUAL_OVERRIDE_KEY = "split_manual_override"
 EXPENSE_SUCCESS_MESSAGE_KEY = "expense_success_message"
 RESET_EXPENSE_FORM_KEY = "reset_expense_form"
 LAST_PROJECT_KEY = "last_project"
@@ -55,7 +56,6 @@ def _render_currency_selector(project_name: str, label_visibility: str = "visibl
         "Currency",
         currency_options,
         selection_mode="single",
-        default=st.session_state[EXPENSE_CURRENCY_KEY],
         key="expense_currency",
         label_visibility=label_visibility,
     )
@@ -71,6 +71,7 @@ def _initialize_expense_state(username: str, project_name: str) -> None:
     st.session_state.setdefault(SPLIT_MARCO_AMOUNT_KEY, 0.0)
     st.session_state.setdefault(SPLIT_MONI_AMOUNT_KEY, 0.0)
     st.session_state.setdefault(LAST_SPLIT_EDITED_KEY, "")
+    st.session_state.setdefault(SPLIT_MANUAL_OVERRIDE_KEY, False)
     st.session_state.setdefault(EXPENSE_SUCCESS_MESSAGE_KEY, "")
     st.session_state.setdefault(RESET_EXPENSE_FORM_KEY, False)
     last_project = st.session_state.get(LAST_PROJECT_KEY)
@@ -78,15 +79,17 @@ def _initialize_expense_state(username: str, project_name: str) -> None:
         st.session_state[EXPENSE_CURRENCY_KEY] = PROJECTS[project_name]["default_currency"]
         st.session_state[TRANSACTION_TYPE_KEY] = "Expense"
         st.session_state[EXPENSE_CATEGORY_KEY] = list(CATEGORIES["Expense"].keys())[0]
+        st.session_state[LAST_SPLIT_EDITED_KEY] = ""
+        st.session_state[SPLIT_MANUAL_OVERRIDE_KEY] = False
         st.session_state[LAST_PROJECT_KEY] = project_name
     if st.session_state[EXPENSE_CURRENCY_KEY] not in _get_project_currency_options(project_name):
         st.session_state[EXPENSE_CURRENCY_KEY] = _get_project_currency_options(project_name)[0]
-    _set_default_split_amounts(username, preserve_manual=False)
+    _set_default_split_amounts(username, preserve_manual=True)
 
 
 def _set_default_split_amounts(username: str, preserve_manual: bool = True) -> None:
     amount = float(st.session_state.get(EXPENSE_AMOUNT_KEY) or 0.0)
-    if preserve_manual and st.session_state.get(LAST_SPLIT_EDITED_KEY):
+    if preserve_manual and st.session_state.get(SPLIT_MANUAL_OVERRIDE_KEY) and st.session_state.get(LAST_SPLIT_EDITED_KEY):
         _sync_split_amounts(st.session_state.get(LAST_SPLIT_EDITED_KEY) or "marco")
         return
 
@@ -103,6 +106,7 @@ def _set_default_split_amounts(username: str, preserve_manual: bool = True) -> N
         st.session_state[SPLIT_MARCO_AMOUNT_KEY] = round(amount, 2)
         st.session_state[SPLIT_MONI_AMOUNT_KEY] = 0.0
         st.session_state[LAST_SPLIT_EDITED_KEY] = "marco"
+    st.session_state[SPLIT_MANUAL_OVERRIDE_KEY] = False
 
 
 def _sync_split_amounts(edited_field: str) -> None:
@@ -122,6 +126,7 @@ def _sync_split_amounts(edited_field: str) -> None:
     st.session_state[SPLIT_MARCO_AMOUNT_KEY] = marco_amount
     st.session_state[SPLIT_MONI_AMOUNT_KEY] = moni_amount
     st.session_state[LAST_SPLIT_EDITED_KEY] = edited_field
+    st.session_state[SPLIT_MANUAL_OVERRIDE_KEY] = True
 
 
 def _handle_total_amount_change(username: str) -> None:
@@ -136,15 +141,15 @@ def _handle_moni_split_change() -> None:
     _sync_split_amounts("moni")
 
 
-def _get_split_percentages(username: str) -> tuple[int, int]:
+def _get_split_percentages(username: str) -> tuple[float, float]:
     amount = float(st.session_state.get(EXPENSE_AMOUNT_KEY) or 0.0)
     if amount <= 0:
-        return (0, 0)
+        return (0.0, 0.0)
 
     marco_amount = float(st.session_state.get(SPLIT_MARCO_AMOUNT_KEY) or 0.0)
-    marco_share = round((marco_amount / amount) * 100)
-    marco_share = min(max(marco_share, 0), 100)
-    moni_share = 100 - marco_share
+    marco_share = round((marco_amount / amount) * 100, 2)
+    marco_share = min(max(marco_share, 0.0), 100.0)
+    moni_share = round(100.0 - marco_share, 2)
     return (marco_share, moni_share)
 
 
@@ -407,8 +412,8 @@ def _save_expense(
     category: str,
     project_name: str,
     user: str,
-    marco_share: int,
-    moni_share: int,
+    marco_share: float,
+    moni_share: float,
 ) -> None:
     """Save expense to Google Sheets with currency conversion."""
     try:
@@ -445,8 +450,8 @@ def _save_expense(
         append_transactions(project_name, values)
         
         split_note = ""
-        if not is_private_flow_project(project_name) and (marco_share, moni_share) not in {(100, 0), (0, 100)}:
-            split_note = f" Payment: Marco {marco_share}% / Moni {moni_share}%."
+        if not is_private_flow_project(project_name) and (marco_share, moni_share) not in {(100.0, 0.0), (0.0, 100.0)}:
+            split_note = f" Payment: Marco {marco_share:.2f}% / Moni {moni_share:.2f}%."
         msg = f"✅ Saved {transaction_type.lower()} in {category}: {currency} {amount:.2f} ({project_currency} {project_amount:.2f}).{split_note}"
         log.info(f"Successfully saved transaction: {msg}")
         st.session_state[EXPENSE_SUCCESS_MESSAGE_KEY] = msg

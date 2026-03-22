@@ -21,6 +21,11 @@ PROJECTS = {
         "type": "personal",
         "allowed_users": ["marconigris"],
     },
+    "USDT": {
+        "default_currency": "USDT",
+        "type": "personal",
+        "allowed_users": ["marconigris"],
+    },
     "Coaching": {
         "default_currency": "USD",
         "type": "business",

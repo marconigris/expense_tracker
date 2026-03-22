@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 # Fallback rates (in case sheet is not available during startup)
 FALLBACK_RATES = {
     "USD": 1.0,
+    "USDT": 1.0,
     "EUR": 0.92,
     "DOP": 58.50,
     "ARS": 1080.00,
@@ -36,11 +37,13 @@ def get_exchange_rates() -> Dict[str, float]:
         service = get_sheets_service()
         
         # Get spreadsheet ID from secrets
-        try:
-            import streamlit as st_inner
-            spreadsheet_id = st_inner.secrets.get("GOOGLE_SHEET_ID")
-        except FileNotFoundError:
-            spreadsheet_id = os.getenv("GOOGLE_SHEET_ID")
+        spreadsheet_id = os.getenv("GOOGLE_SHEET_ID")
+        if not spreadsheet_id:
+            try:
+                import streamlit as st_inner
+                spreadsheet_id = st_inner.secrets.get("GOOGLE_SHEET_ID")
+            except FileNotFoundError:
+                spreadsheet_id = None
         
         if not spreadsheet_id:
             logger.warning("GOOGLE_SHEET_ID not found, using fallback rates")

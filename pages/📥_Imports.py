@@ -465,8 +465,8 @@ def render() -> None:
         with map_col3:
             fallback_currency = st.selectbox(
                 "Statement currency",
-                ["USD", "EUR", "DOP", "ARS", "ZAR"],
-                index=["USD", "EUR", "DOP", "ARS", "ZAR"].index(str(guessed_mapping["fallback_currency"])) if str(guessed_mapping["fallback_currency"]) in {"USD", "EUR", "DOP", "ARS", "ZAR"} else 0,
+                ["USD", "USDT", "EUR", "DOP", "ARS", "ZAR"],
+                index=["USD", "USDT", "EUR", "DOP", "ARS", "ZAR"].index(str(guessed_mapping["fallback_currency"])) if str(guessed_mapping["fallback_currency"]) in {"USD", "USDT", "EUR", "DOP", "ARS", "ZAR"} else 0,
             )
             external_id_choice = st.selectbox(
                 "Reference column",

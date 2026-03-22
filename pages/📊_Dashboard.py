@@ -28,6 +28,7 @@ def get_project_currency(project_name: str | None = None) -> str:
 def get_currency_symbol(currency: str) -> str:
     return {
         "USD": "$",
+        "USDT": "$",
         "EUR": "€",
         "DOP": "RD$",
         "ARS": "ARS$",
@@ -327,8 +328,15 @@ load_dotenv()
 def get_google_sheets_service():
     """Cache Google Sheets credentials and service"""
     try:
+        creds_json = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
+        if not creds_json:
+            try:
+                creds_json = st.secrets.get("GOOGLE_SHEETS_CREDENTIALS")
+            except FileNotFoundError:
+                creds_json = None
+
         creds = service_account.Credentials.from_service_account_info(
-            json.loads(os.getenv('GOOGLE_SHEETS_CREDENTIALS')),
+            json.loads(creds_json),
             scopes=['https://www.googleapis.com/auth/spreadsheets']
         )
         service = build('sheets', 'v4', credentials=creds)
@@ -341,6 +349,11 @@ def get_google_sheets_service():
 try:
     service = get_google_sheets_service()
     SHEET_ID = os.getenv('GOOGLE_SHEET_ID')
+    if not SHEET_ID:
+        try:
+            SHEET_ID = st.secrets.get('GOOGLE_SHEET_ID')
+        except FileNotFoundError:
+            SHEET_ID = None
 except Exception:
     st.error("Failed to connect to Google Sheets. Please check your credentials.")
     sys.exit(1)

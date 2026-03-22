@@ -5,7 +5,7 @@ import os
 import pandas as pd
 import streamlit as st
 
-from config.constants import PROJECTS, get_project_config, is_personal_project
+from config.constants import PROJECTS, get_project_config, is_private_flow_project
 from config.exchange_rates import convert_currency
 from services.google_sheets import (
     IMPORTS_SHEET_NAME,
@@ -37,10 +37,12 @@ TRANSACTION_COLUMNS = [
 
 
 def _get_spreadsheet_id() -> str:
-    try:
-        spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
-    except FileNotFoundError:
-        spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+    spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+    if not spreadsheet_id:
+        try:
+            spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
+        except FileNotFoundError:
+            spreadsheet_id = None
 
     if not spreadsheet_id:
         raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")
@@ -231,11 +233,70 @@ def get_shared_account_summary(project_name: str) -> dict[str, float | str]:
     }
 
 
+def get_project_dashboard_dataframe(project_name: str, report_currency: str = "USD") -> pd.DataFrame:
+    values = _get_project_sheet_values(project_name)
+    if not values:
+        return pd.DataFrame(columns=TRANSACTION_COLUMNS + ['Project', 'Ledger Group', 'Reported Currency'])
+
+    project_df = _normalize_transactions_dataframe(values)
+    project_df = _normalize_amounts_to_currency(project_df, report_currency)
+    project_df = project_df[project_df['Type'].isin(['Expense', 'Income'])].copy()
+    if project_df.empty:
+        return pd.DataFrame(columns=TRANSACTION_COLUMNS + ['Project', 'Ledger Group', 'Reported Currency'])
+
+    project_type = get_project_config(project_name).get("type")
+    if project_type == "shared":
+        ledger_group = "Shared Space"
+    elif project_type == "business":
+        ledger_group = "Business Ledger"
+    else:
+        ledger_group = "Private Ledger"
+
+    project_df['Date'] = _parse_sheet_dates(project_df['Date'])
+    project_df['Project'] = project_name
+    project_df['Ledger Group'] = ledger_group
+    project_df['Reported Currency'] = report_currency
+    project_df['Amount'] = pd.to_numeric(project_df['Amount'], errors='coerce').fillna(0.0)
+    project_df['Currency Amount'] = pd.to_numeric(project_df['Currency Amount'], errors='coerce').fillna(project_df['Amount'])
+    project_df['Account'] = project_df['Account'].fillna('').replace('', pd.NA).fillna(project_df['Project'])
+    project_df['Category'] = project_df['Category'].fillna('').replace('', 'Uncategorized')
+    project_df['Description'] = project_df['Description'].fillna('').astype(str).str.strip()
+    return project_df.sort_values('Date', ascending=False).reset_index(drop=True)
+
+
+def get_project_full_dashboard_dataframe(project_name: str, report_currency: str = "USD") -> pd.DataFrame:
+    values = _get_project_sheet_values(project_name)
+    if not values:
+        return pd.DataFrame(columns=TRANSACTION_COLUMNS + ['Project', 'Ledger Group', 'Reported Currency'])
+
+    project_df = _normalize_transactions_dataframe(values)
+    project_df = _normalize_amounts_to_currency(project_df, report_currency)
+
+    project_type = get_project_config(project_name).get("type")
+    if project_type == "shared":
+        ledger_group = "Shared Space"
+    elif project_type == "business":
+        ledger_group = "Business Ledger"
+    else:
+        ledger_group = "Private Ledger"
+
+    project_df['Date'] = _parse_sheet_dates(project_df['Date'])
+    project_df['Project'] = project_name
+    project_df['Ledger Group'] = ledger_group
+    project_df['Reported Currency'] = report_currency
+    project_df['Amount'] = pd.to_numeric(project_df['Amount'], errors='coerce').fillna(0.0)
+    project_df['Currency Amount'] = pd.to_numeric(project_df['Currency Amount'], errors='coerce').fillna(project_df['Amount'])
+    project_df['Account'] = project_df['Account'].fillna('').replace('', pd.NA).fillna(project_df['Project'])
+    project_df['Category'] = project_df['Category'].fillna('').replace('', 'Uncategorized')
+    project_df['Description'] = project_df['Description'].fillna('').astype(str).str.strip()
+    return project_df.sort_values('Date', ascending=False).reset_index(drop=True)
+
+
 def get_private_dashboard_dataframe(report_currency: str = "USD") -> pd.DataFrame:
     frames: list[pd.DataFrame] = []
 
     for project_name in PROJECTS:
-        if not is_personal_project(project_name):
+        if not is_private_flow_project(project_name):
             continue
 
         values = _get_project_sheet_values(project_name)
@@ -250,7 +311,10 @@ def get_private_dashboard_dataframe(report_currency: str = "USD") -> pd.DataFram
 
         project_df['Date'] = _parse_sheet_dates(project_df['Date'])
         project_df['Project'] = project_name
-        project_df['Ledger Group'] = "Private Ledger"
+        if get_project_config(project_name).get("type") == "business":
+            project_df['Ledger Group'] = "Business Ledger"
+        else:
+            project_df['Ledger Group'] = "Private Ledger"
         project_df['Reported Currency'] = report_currency
         frames.append(project_df)
 

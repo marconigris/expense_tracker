@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 import streamlit as st
@@ -55,7 +56,7 @@ def render_sidebar_navigation() -> None:
             ):
                 set_current_project(project_name)
                 set_sidebar_autoclose_pending(True)
-                st.switch_page("Home.py")
+                st.switch_page(_get_home_page_path())
 
     if shared_projects:
         st.sidebar.markdown("### Shared Spaces")
@@ -212,12 +213,15 @@ def render_global_header() -> None:
     project_name = get_current_project()
     
     if username:
+        app_env = os.getenv("APP_ENV", "").strip().lower()
         if is_business_project(project_name):
             project_mode = "Business Ledger"
         elif is_private_flow_project(project_name):
             project_mode = "Private Ledger"
         else:
             project_mode = "Shared Expense Space"
+        if app_env == "staging":
+            project_mode = f"{project_mode} · Staging"
         st.markdown(
             f"""
             <div class="hero-header">
@@ -245,12 +249,17 @@ def render_top_view_navigation(active_view: str) -> None:
     if selected_view == "Balances" and active_view != "Balances":
         st.switch_page("pages/📊_Dashboard.py")
     elif selected_view == "Expense" and active_view != "Expense":
-        st.switch_page("Home.py")
+        st.switch_page(_get_home_page_path())
+
+
+def _get_home_page_path() -> str:
+    return "Home_staging.py" if os.getenv("APP_ENV", "").strip().lower() == "staging" else "Home.py"
 
 
 def _get_currency_symbol(currency: str) -> str:
     return {
         "USD": "$",
+        "USDT": "$",
         "EUR": "€",
         "DOP": "RD$",
         "ARS": "ARS$",

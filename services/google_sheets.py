@@ -76,6 +76,18 @@ SPLIT_EXPENSE_HEADERS = [
 TRANSACTION_END_COLUMN = 'Q'
 
 
+def _get_config_value(key: str) -> Any:
+    """Prefer environment overrides for local staging, then fall back to Streamlit secrets."""
+    env_value = os.getenv(key)
+    if env_value not in {None, ""}:
+        return env_value
+
+    try:
+        return st.secrets.get(key)
+    except FileNotFoundError:
+        return None
+
+
 def _default_split_for_user(user: str) -> list[int | str]:
     normalized_user = user.strip().lower()
     if normalized_user == "marconigris":
@@ -271,14 +283,7 @@ def _is_missing_range_error(error: Exception) -> bool:
 def get_sheets_service():
     """Cache Google Sheets service configuration."""
     try:
-        # Try to get credentials from Streamlit secrets first, then fall back to environment variables
-        creds_json = None
-        
-        try:
-            creds_json = st.secrets.get("GOOGLE_SHEETS_CREDENTIALS")
-        except FileNotFoundError:
-            creds_json = os.getenv("GOOGLE_SHEETS_CREDENTIALS")
-        
+        creds_json = _get_config_value("GOOGLE_SHEETS_CREDENTIALS")
         if creds_json is None:
             raise ValueError("GOOGLE_SHEETS_CREDENTIALS not found in secrets or environment variables")
 
@@ -339,6 +344,7 @@ def initialize_exchange_rates_sheet(service: Any, spreadsheet_id: str) -> None:
         # divides the input amount by this rate.
         formulas = [
             ['USD', 1.0],
+            ['USDT', 1.0],
             ['EUR', '=GOOGLEFINANCE("CURRENCY:USDEUR")'],
             ['DOP', '=GOOGLEFINANCE("CURRENCY:USDDOP")'],
             ['ARS', '=GOOGLEFINANCE("CURRENCY:USDARS")'],
@@ -359,7 +365,7 @@ def initialize_exchange_rates_sheet(service: Any, spreadsheet_id: str) -> None:
         _execute_request(
             service.spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id,
-                range='ExchangeRates!A2:B6',
+                range='ExchangeRates!A2:B7',
                 valueInputOption='USER_ENTERED',
                 body={'values': formulas}
             )
@@ -379,11 +385,7 @@ def verify_sheets_setup() -> bool:
     """
     try:
         service = get_sheets_service()
-        spreadsheet_id = None
-        try:
-            spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
-        except FileNotFoundError:
-            spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+        spreadsheet_id = _get_config_value(SPREADSHEET_ID_ENV_VAR)
         
         if not spreadsheet_id:
             logger.error(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment")
@@ -474,10 +476,7 @@ def get_sheet_url() -> str | None:
     """
     Devuelve la URL del Google Sheet principal si el ID está configurado.
     """
-    try:
-        spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
-    except FileNotFoundError:
-        spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+    spreadsheet_id = _get_config_value(SPREADSHEET_ID_ENV_VAR)
     
     if not spreadsheet_id:
         return None
@@ -492,10 +491,7 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
     """
     service = get_sheets_service()
     
-    try:
-        spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
-    except FileNotFoundError:
-        spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+    spreadsheet_id = _get_config_value(SPREADSHEET_ID_ENV_VAR)
     
     if not spreadsheet_id:
         raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")
@@ -539,11 +535,7 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
 
 def get_import_profiles() -> list[dict[str, str]]:
     service = get_sheets_service()
-
-    try:
-        spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
-    except FileNotFoundError:
-        spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+    spreadsheet_id = _get_config_value(SPREADSHEET_ID_ENV_VAR)
 
     if not spreadsheet_id:
         raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")
@@ -577,11 +569,7 @@ def save_import_profile(
     fallback_currency: str,
 ) -> None:
     service = get_sheets_service()
-
-    try:
-        spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
-    except FileNotFoundError:
-        spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+    spreadsheet_id = _get_config_value(SPREADSHEET_ID_ENV_VAR)
 
     if not spreadsheet_id:
         raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")
@@ -614,11 +602,7 @@ def save_import_profile(
 
 def get_transaction_rows(sheet_name: str) -> list[list[str]]:
     service = get_sheets_service()
-
-    try:
-        spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
-    except FileNotFoundError:
-        spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+    spreadsheet_id = _get_config_value(SPREADSHEET_ID_ENV_VAR)
 
     if not spreadsheet_id:
         raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")
@@ -633,11 +617,7 @@ def get_transaction_rows(sheet_name: str) -> list[list[str]]:
 
 def overwrite_transaction_rows(sheet_name: str, rows: list[list[Any]]) -> None:
     service = get_sheets_service()
-
-    try:
-        spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
-    except FileNotFoundError:
-        spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+    spreadsheet_id = _get_config_value(SPREADSHEET_ID_ENV_VAR)
 
     if not spreadsheet_id:
         raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")

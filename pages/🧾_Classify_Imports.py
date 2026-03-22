@@ -21,6 +21,20 @@ log = setup_logging("expense_tracker_classify_imports")
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 
 
+def _format_sheet_dates(series: pd.Series) -> pd.Series:
+    numeric_values = pd.to_numeric(series, errors="coerce")
+    serial_dates = pd.to_datetime(
+        numeric_values,
+        unit="D",
+        origin="1899-12-30",
+        errors="coerce",
+    )
+    text_candidates = series.where(numeric_values.isna())
+    text_dates = pd.to_datetime(text_candidates, errors="coerce")
+    parsed_dates = serial_dates.fillna(text_dates)
+    return parsed_dates.dt.strftime("%Y-%m-%d").fillna(series.astype(str))
+
+
 def _load_imports_df() -> pd.DataFrame:
     values = get_transaction_rows(IMPORTS_SHEET_NAME)
     if not values:
@@ -126,6 +140,17 @@ def _duplicate_flag_label(hint: str) -> str:
     return f"Possible duplicate in {parsed_hint['Matched Project']}"
 
 
+def _merge_editor_changes(source_df: pd.DataFrame, edited_df: pd.DataFrame) -> pd.DataFrame:
+    merged_df = source_df.copy().reset_index(drop=True)
+    merged_df["Description"] = edited_df["Description"].fillna("").astype(str).str.strip()
+    merged_df["Currency Amount"] = pd.to_numeric(edited_df["Currency Amount"], errors="coerce").fillna(
+        pd.to_numeric(merged_df["Currency Amount"], errors="coerce").fillna(
+            pd.to_numeric(merged_df["Amount"], errors="coerce").fillna(0.0)
+        )
+    )
+    return merged_df
+
+
 def render() -> None:
     if not ensure_startup():
         return
@@ -172,16 +197,18 @@ def render() -> None:
         st.info("No rows matched the current filters.")
         return
 
+    filtered_df = filtered_df.reset_index(drop=True)
     select_all = st.checkbox("Select all filtered rows")
 
     preview_df = filtered_df[[
-        "Date",
         "Type",
+        "Date",
+        "Description",
         "Currency Amount",
         "Currency",
-        "Description",
         "Account",
     ]].copy()
+    preview_df["Date"] = _format_sheet_dates(preview_df["Date"])
     preview_df.insert(0, "Select", select_all)
     preview_df["Duplicate Flag"] = filtered_df["Match ID"].apply(_duplicate_flag_label)
 
@@ -191,12 +218,19 @@ def render() -> None:
         height=440,
         hide_index=True,
         column_config={
-            "Select": st.column_config.CheckboxColumn("Select"),
+            "Select": st.column_config.CheckboxColumn("Select", width="small"),
+            "Type": st.column_config.TextColumn("Type", disabled=True, width="small"),
+            "Date": st.column_config.DateColumn("Date", disabled=True, width="small", format="YYYY-MM-DD"),
+            "Description": st.column_config.TextColumn("Description", width="medium"),
+            "Currency Amount": st.column_config.NumberColumn("Currency Amount", format="%.2f", width="small"),
+            "Currency": st.column_config.TextColumn("Currency", disabled=True, width="small"),
+            "Account": st.column_config.TextColumn("Account", disabled=True, width="small"),
             "Duplicate Flag": st.column_config.TextColumn("Duplicate Flag", disabled=True),
         },
     )
 
-    selected_rows = filtered_df.loc[edited_df["Select"] == True, "Sheet Row"].tolist()
+    merged_filtered_df = _merge_editor_changes(filtered_df, edited_df)
+    selected_rows = merged_filtered_df.loc[edited_df["Select"] == True, "Sheet Row"].tolist()
     st.caption(f"{len(selected_rows)} rows selected.")
 
     action_col1, action_col2, action_col3 = st.columns(3)
@@ -225,6 +259,15 @@ def render() -> None:
             return
 
         updated_df = df.copy()
+        edited_selected_rows = merged_filtered_df.loc[edited_df["Select"] == True, [
+            "Sheet Row",
+            "Description",
+            "Currency Amount",
+        ]].copy()
+        for _, edited_row in edited_selected_rows.iterrows():
+            row_mask = updated_df["Sheet Row"] == edited_row["Sheet Row"]
+            updated_df.loc[row_mask, "Description"] = edited_row["Description"]
+            updated_df.loc[row_mask, "Currency Amount"] = edited_row["Currency Amount"]
         selected_mask = updated_df["Sheet Row"].isin(selected_rows)
 
         if action == "Project":
