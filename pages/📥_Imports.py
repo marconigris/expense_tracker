@@ -23,7 +23,7 @@ from utils.logging_utils import setup_logging
 
 log = setup_logging("expense_tracker_imports")
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 
 
 BRUBANK_CURRENCY_MAP = {

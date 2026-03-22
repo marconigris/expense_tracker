@@ -70,6 +70,16 @@ def render_sidebar_navigation() -> None:
         _render_project_buttons(business_projects)
 
     if username == "marconigris":
+        st.sidebar.markdown("### Dashboards")
+        if st.sidebar.button(
+            "Private Dashboard",
+            key="nav_private_dashboard",
+            width="stretch",
+            type="secondary",
+        ):
+            set_sidebar_autoclose_pending(True)
+            st.switch_page("pages/🔒_Private_Dashboard.py")
+
         st.sidebar.markdown("### Workflows")
         if st.sidebar.button(
             "Imports",

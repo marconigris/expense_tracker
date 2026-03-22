@@ -17,7 +17,7 @@ from config.exchange_rates import convert_currency
 
 log = setup_logging("expense_tracker_analytics")
 
-st.set_page_config (layout='wide')
+st.set_page_config(layout='wide', initial_sidebar_state="expanded")
 
 
 def get_project_currency(project_name: str | None = None) -> str:

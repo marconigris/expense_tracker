@@ -18,7 +18,7 @@ from utils.logging_utils import setup_logging
 
 log = setup_logging("expense_tracker_classify_imports")
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 
 
 def _load_imports_df() -> pd.DataFrame:

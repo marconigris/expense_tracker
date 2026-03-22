@@ -31,15 +31,31 @@ EXPENSE_SUCCESS_MESSAGE_KEY = "expense_success_message"
 RESET_EXPENSE_FORM_KEY = "reset_expense_form"
 LAST_PROJECT_KEY = "last_project"
 
+PROJECT_CURRENCY_OPTIONS = {
+    "Cabarete": ["USD", "EUR", "DOP"],
+    "Hymerlife": ["EUR", "USD"],
+}
+
 
 # ---------- UI HELPERS ----------
 
-def _render_currency_selector(label_visibility: str = "visible") -> str:
+def _get_project_currency_options(project_name: str) -> list[str]:
+    default_currency = PROJECTS[project_name]["default_currency"]
+    return PROJECT_CURRENCY_OPTIONS.get(project_name, [default_currency])
+
+
+def _render_currency_selector(project_name: str, label_visibility: str = "visible") -> str:
     """Render the currency picker as native segmented buttons."""
+    currency_options = _get_project_currency_options(project_name)
+    current_currency = st.session_state.get(EXPENSE_CURRENCY_KEY, PROJECTS[project_name]["default_currency"])
+    if current_currency not in currency_options:
+        st.session_state[EXPENSE_CURRENCY_KEY] = currency_options[0]
+
     return st.segmented_control(
         "Currency",
-        ["USD", "EUR", "DOP", "ARS", "ZAR"],
+        currency_options,
         selection_mode="single",
+        default=st.session_state[EXPENSE_CURRENCY_KEY],
         key="expense_currency",
         label_visibility=label_visibility,
     )
@@ -63,6 +79,8 @@ def _initialize_expense_state(username: str, project_name: str) -> None:
         st.session_state[TRANSACTION_TYPE_KEY] = "Expense"
         st.session_state[EXPENSE_CATEGORY_KEY] = list(CATEGORIES["Expense"].keys())[0]
         st.session_state[LAST_PROJECT_KEY] = project_name
+    if st.session_state[EXPENSE_CURRENCY_KEY] not in _get_project_currency_options(project_name):
+        st.session_state[EXPENSE_CURRENCY_KEY] = _get_project_currency_options(project_name)[0]
     _set_default_split_amounts(username, preserve_manual=False)
 
 
@@ -312,7 +330,7 @@ def render_add_expense_form() -> None:
 
         with col2:
             st.caption("Currency")
-            currency = _render_currency_selector(label_visibility="collapsed")
+            currency = _render_currency_selector(current_project, label_visibility="collapsed")
 
     st.selectbox(
         "Category",

@@ -5,9 +5,10 @@ import os
 import pandas as pd
 import streamlit as st
 
-from config.constants import get_project_config
+from config.constants import PROJECTS, get_project_config, is_personal_project
 from config.exchange_rates import convert_currency
 from services.google_sheets import (
+    IMPORTS_SHEET_NAME,
     SPREADSHEET_ID_ENV_VAR,
     get_sheets_service,
     verify_sheets_setup,
@@ -88,6 +89,46 @@ def _normalize_project_amounts(df: pd.DataFrame, project_name: str) -> pd.DataFr
     normalized_df['Amount'] = normalized_df.apply(_normalize_row, axis=1)
     normalized_df['Amount'] = pd.to_numeric(normalized_df['Amount'], errors='coerce').fillna(0.0)
     return normalized_df
+
+
+def _normalize_amounts_to_currency(df: pd.DataFrame, target_currency: str) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    normalized_df = df.copy()
+
+    def _normalize_row(row: pd.Series) -> float:
+        currency_amount = pd.to_numeric(row.get('Currency Amount'), errors='coerce')
+        source_currency = str(row.get('Currency', '')).strip().upper()
+        stored_amount = pd.to_numeric(row.get('Amount'), errors='coerce')
+
+        if pd.notna(currency_amount) and source_currency:
+            try:
+                return round(convert_currency(float(currency_amount), source_currency, target_currency), 2)
+            except Exception:
+                pass
+
+        return float(stored_amount) if pd.notna(stored_amount) else 0.0
+
+    normalized_df['Amount'] = normalized_df.apply(_normalize_row, axis=1)
+    normalized_df['Amount'] = pd.to_numeric(normalized_df['Amount'], errors='coerce').fillna(0.0)
+    return normalized_df
+
+
+def _parse_sheet_dates(series: pd.Series) -> pd.Series:
+    if pd.api.types.is_datetime64_any_dtype(series):
+        return pd.to_datetime(series, errors='coerce')
+
+    numeric_values = pd.to_numeric(series, errors='coerce')
+    serial_dates = pd.to_datetime(
+        numeric_values,
+        unit='D',
+        origin='1899-12-30',
+        errors='coerce',
+    )
+    text_candidates = series.where(numeric_values.isna())
+    text_dates = pd.to_datetime(text_candidates, errors='coerce')
+    return serial_dates.fillna(text_dates)
 
 
 def get_personal_account_summary(project_name: str) -> dict[str, float | str]:
@@ -188,3 +229,55 @@ def get_shared_account_summary(project_name: str) -> dict[str, float | str]:
         "moni_paid": moni_paid,
         "settlement_message": settlement_message,
     }
+
+
+def get_private_dashboard_dataframe(report_currency: str = "USD") -> pd.DataFrame:
+    frames: list[pd.DataFrame] = []
+
+    for project_name in PROJECTS:
+        if not is_personal_project(project_name):
+            continue
+
+        values = _get_project_sheet_values(project_name)
+        if not values:
+            continue
+
+        project_df = _normalize_transactions_dataframe(values)
+        project_df = _normalize_amounts_to_currency(project_df, report_currency)
+        project_df = project_df[project_df['Type'].isin(['Expense', 'Income'])].copy()
+        if project_df.empty:
+            continue
+
+        project_df['Date'] = _parse_sheet_dates(project_df['Date'])
+        project_df['Project'] = project_name
+        project_df['Ledger Group'] = "Private Ledger"
+        project_df['Reported Currency'] = report_currency
+        frames.append(project_df)
+
+    imported_values = _get_project_sheet_values(IMPORTS_SHEET_NAME)
+    if imported_values:
+        imported_df = _normalize_transactions_dataframe(imported_values)
+        imported_df = imported_df[
+            imported_df['Scope'].fillna('').astype(str).str.strip().str.lower().eq('private')
+            & imported_df['Match ID'].fillna('').astype(str).str.strip().str.lower().eq('private')
+            & imported_df['Type'].isin(['Expense', 'Income'])
+        ].copy()
+        if not imported_df.empty:
+            imported_df = _normalize_amounts_to_currency(imported_df, report_currency)
+            imported_df['Date'] = _parse_sheet_dates(imported_df['Date'])
+            imported_df['Project'] = "Imported Private"
+            imported_df['Ledger Group'] = "Imported Statement"
+            imported_df['Reported Currency'] = report_currency
+            frames.append(imported_df)
+
+    if not frames:
+        return pd.DataFrame(columns=TRANSACTION_COLUMNS + ['Project', 'Ledger Group', 'Reported Currency'])
+
+    combined_df = pd.concat(frames, ignore_index=True)
+    combined_df['Amount'] = pd.to_numeric(combined_df['Amount'], errors='coerce').fillna(0.0)
+    combined_df['Currency Amount'] = pd.to_numeric(combined_df['Currency Amount'], errors='coerce').fillna(combined_df['Amount'])
+    combined_df['Account'] = combined_df['Account'].fillna('').replace('', pd.NA).fillna(combined_df['Project'])
+    combined_df['Category'] = combined_df['Category'].fillna('').replace('', 'Uncategorized')
+    combined_df['Description'] = combined_df['Description'].fillna('').astype(str).str.strip()
+    combined_df = combined_df.sort_values('Date', ascending=False).reset_index(drop=True)
+    return combined_df
