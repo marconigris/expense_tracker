@@ -36,7 +36,6 @@ def _render_currency_selector() -> str:
     return st.segmented_control(
         "Currency",
         ["USD", "EUR", "DOP"],
-        default="USD",
         selection_mode="single",
         key="expense_currency",
     )
@@ -269,7 +268,6 @@ def _render_expense_intro() -> None:
         """
         <div class="expense-shell">
             <div class="expense-hero">
-                <div class="expense-hero-kicker">Quick Add</div>
             </div>
             <div class="expense-card">
         """,
