@@ -61,10 +61,8 @@ def render_global_header() -> None:
     username = get_authenticated_username()
     
     if username:
-        st.write(f"¡Hola, **{username}**! 👋")
+        st.write(f"¡Hola, **{username}**! 👋", help=None)
     
     sheet_url = get_main_sheet_url()
     if sheet_url:
         st.sidebar.markdown(f"[📊 View Google Sheet]({sheet_url})")
-
-    st.divider()
