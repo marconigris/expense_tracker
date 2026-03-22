@@ -4,10 +4,10 @@ from typing import Optional
 
 import streamlit as st
 
-from services.google_sheets import get_sheets_service, verify_sheets_setup, get_sheet_url
+from services.google_sheets import get_sheet_url
 from services.auth_service import render_login, render_logout, get_authenticated_username, is_authenticated
 from utils.logging_utils import setup_logging
-from state import is_sheets_verified, set_sheets_verified, init_session_state, get_current_project, set_current_project
+from state import init_session_state, get_current_project, set_current_project
 from config.constants import PROJECTS
 
 log = setup_logging("expense_tracker_bootstrap")
@@ -51,14 +51,6 @@ def ensure_startup() -> bool:
     render_sidebar_navigation()
     render_logout()  # Show logout in sidebar
 
-    if not is_sheets_verified():
-        log.info("Verifying Google Sheets setup...")
-        if verify_sheets_setup():
-            set_sheets_verified(True)
-            log.info("Google Sheets setup verified.")
-        else:
-            log.warning("Google Sheets setup could not be fully verified on this run.")
-    
     return True
 
 
