@@ -104,7 +104,7 @@ def render_global_header() -> None:
     project_name = get_current_project()
     
     if username:
-        st.title(f"Hola {username}, welcome to {project_name}")
+        st.write(f"Hola **{username}**, welcome to **{project_name}**")
     
 def render_top_view_navigation(active_view: str) -> None:
     """Render the top-level page switcher between Expense and Balances."""

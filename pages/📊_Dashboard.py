@@ -324,6 +324,15 @@ def get_pending_transactions() -> pd.DataFrame:
 
 def initialize_filters():
     """Initialize filter values in session state if they don't exist"""
+    current_project = get_current_project()
+    if st.session_state.get('global_filter_project') != current_project:
+        st.session_state.global_filter_type = "All Time"
+        st.session_state.global_selected_year = datetime.now().year
+        st.session_state.global_selected_month = datetime.now().month
+        st.session_state.global_start_date = datetime.now() - timedelta(days=30)
+        st.session_state.global_end_date = datetime.now()
+        st.session_state.global_filter_project = current_project
+
     if 'global_filter_type' not in st.session_state:
         st.session_state.global_filter_type = "All Time"
     if 'global_selected_year' not in st.session_state:
