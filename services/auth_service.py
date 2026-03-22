@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Path to credentials file
 CREDENTIALS_PATH = Path(__file__).parent.parent / "config" / "auth_users.yaml"
+AUTHENTICATOR_KEY = "_authenticator_instance"
 
 
 def _convert_to_dict(obj):
@@ -40,57 +41,62 @@ def _convert_to_dict(obj):
         return obj
 
 
+def _load_auth_config():
+    """Load authentication config from Streamlit secrets or local file."""
+    config = None
+
+    if 'credentials' in st.secrets:
+        try:
+            logger.info("Attempting to load from secrets")
+
+            cookie_raw = st.secrets.get('cookie')
+            logger.info(f"Cookie type: {type(cookie_raw)}")
+
+            cookie = _convert_to_dict(cookie_raw)
+            logger.info(f"Converted cookie keys: {list(cookie.keys()) if isinstance(cookie, dict) else 'not a dict'}")
+
+            credentials_raw = st.secrets.get('credentials')
+            credentials = _convert_to_dict(credentials_raw)
+
+            if not isinstance(cookie, dict) or 'name' not in cookie or 'key' not in cookie:
+                raise ValueError(f"Invalid cookie structure: {cookie}")
+
+            config = {
+                'credentials': credentials,
+                'cookie': cookie,
+            }
+            logger.info("Successfully loaded config from secrets")
+        except Exception as secret_error:
+            logger.warning(f"Failed to load from secrets: {secret_error}. Trying file fallback...")
+            config = None
+
+    if config is None:
+        logger.info(f"Attempting to load from file: {CREDENTIALS_PATH}")
+        with open(CREDENTIALS_PATH) as file:
+            config = yaml.safe_load(file)
+        logger.info("Loaded config from file")
+
+    return config
+
+
 def load_authenticator():
     """
-    Load the authenticator with user credentials from secrets or file.
+    Load and reuse a single authenticator instance per Streamlit session.
+    This avoids duplicate CookieManager components with the same key.
     """
     try:
-        config = None
-        
-        # Try to load from Streamlit secrets first (production)
-        if 'credentials' in st.secrets:
-            try:
-                # Access and convert each section individually
-                logger.info(f"Attempting to load from secrets")
-                
-                # Get cookie section
-                cookie_raw = st.secrets.get('cookie')
-                logger.info(f"Cookie type: {type(cookie_raw)}")
-                
-                # Convert cookie to dict
-                cookie = _convert_to_dict(cookie_raw)
-                logger.info(f"Converted cookie keys: {list(cookie.keys()) if isinstance(cookie, dict) else 'not a dict'}")
-                
-                # Get credentials section  
-                credentials_raw = st.secrets.get('credentials')
-                credentials = _convert_to_dict(credentials_raw)
-                
-                if not isinstance(cookie, dict) or 'name' not in cookie or 'key' not in cookie:
-                    raise ValueError(f"Invalid cookie structure: {cookie}")
-                
-                config = {
-                    'credentials': credentials,
-                    'cookie': cookie
-                }
-                logger.info("Successfully loaded config from secrets")
-            except Exception as secret_error:
-                logger.warning(f"Failed to load from secrets: {secret_error}. Trying file fallback...")
-                config = None
-        
-        # Fallback to file if secrets failed or not available
-        if config is None:
-            logger.info(f"Attempting to load from file: {CREDENTIALS_PATH}")
-            with open(CREDENTIALS_PATH) as file:
-                config = yaml.safe_load(file)
-            logger.info("Loaded config from file")
-        
-        # Initialize authenticator
+        authenticator = st.session_state.get(AUTHENTICATOR_KEY)
+        if authenticator is not None:
+            return authenticator
+
+        config = _load_auth_config()
         authenticator = stauth.Authenticate(
             config['credentials'],
             config['cookie']['name'],
             config['cookie']['key'],
             config['cookie']['expiry_days']
         )
+        st.session_state[AUTHENTICATOR_KEY] = authenticator
         return authenticator
     except FileNotFoundError:
         logger.error(f"Credentials file not found at {CREDENTIALS_PATH}")
