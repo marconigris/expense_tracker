@@ -18,11 +18,23 @@ SPREADSHEET_ID_ENV_VAR = "GOOGLE_SHEET_ID"
 def get_sheets_service():
     """Cache Google Sheets service configuration."""
     try:
-        creds_json = os.getenv("GOOGLE_SHEETS_CREDENTIALS")
+        # Try to get credentials from Streamlit secrets first, then fall back to environment variables
+        creds_json = None
+        
+        try:
+            creds_json = st.secrets.get("GOOGLE_SHEETS_CREDENTIALS")
+        except FileNotFoundError:
+            creds_json = os.getenv("GOOGLE_SHEETS_CREDENTIALS")
+        
         if creds_json is None:
-            raise ValueError("GOOGLE_SHEETS_CREDENTIALS environment variable not set")
+            raise ValueError("GOOGLE_SHEETS_CREDENTIALS not found in secrets or environment variables")
 
-        creds_dict = json.loads(creds_json)
+        # Handle both string and dict formats
+        if isinstance(creds_json, str):
+            creds_dict = json.loads(creds_json)
+        else:
+            creds_dict = creds_json
+            
         creds = service_account.Credentials.from_service_account_info(  # type: ignore
             creds_dict,
             scopes=["https://www.googleapis.com/auth/spreadsheets"],
@@ -52,7 +64,11 @@ def get_sheet_url() -> str | None:
     """
     Devuelve la URL del Google Sheet principal si el ID está configurado.
     """
-    spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+    try:
+        spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
+    except FileNotFoundError:
+        spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+    
     if not spreadsheet_id:
         return None
 
@@ -65,9 +81,14 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
     Lista para usar cuando quieras guardar transacciones.
     """
     service = get_sheets_service()
-    spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+    
+    try:
+        spreadsheet_id = st.secrets.get(SPREADSHEET_ID_ENV_VAR)
+    except FileNotFoundError:
+        spreadsheet_id = os.getenv(SPREADSHEET_ID_ENV_VAR)
+    
     if not spreadsheet_id:
-        raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} environment variable not set")
+        raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")
 
     body = {"values": values}
 
