@@ -69,6 +69,11 @@ def _migrate_expense_rows(existing_rows: list[list[str]]) -> list[list[Any]]:
     return migrated_rows
 
 
+def _execute_request(request: Any, num_retries: int = 3) -> Any:
+    """Execute a Google Sheets request with retries for transient network failures."""
+    return request.execute(num_retries=num_retries)
+
+
 @st.cache_resource
 def get_sheets_service():
     """Cache Google Sheets service configuration."""
@@ -108,7 +113,9 @@ def initialize_exchange_rates_sheet(service: Any, spreadsheet_id: str) -> None:
     """
     try:
         # Get existing sheets
-        sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+        sheet_metadata = _execute_request(
+            service.spreadsheets().get(spreadsheetId=spreadsheet_id)
+        )
         sheets = sheet_metadata.get('sheets', [])
         existing_sheets = {s.get("properties", {}).get("title") for s in sheets}
         
@@ -124,10 +131,12 @@ def initialize_exchange_rates_sheet(service: Any, spreadsheet_id: str) -> None:
                     }
                 }]
             }
-            service.spreadsheets().batchUpdate(
-                spreadsheetId=spreadsheet_id,
-                body=body
-            ).execute()
+            _execute_request(
+                service.spreadsheets().batchUpdate(
+                    spreadsheetId=spreadsheet_id,
+                    body=body
+                )
+            )
         
         # Setup headers and formulas
         headers = [['Currency', 'Rate to USD']]
@@ -142,20 +151,24 @@ def initialize_exchange_rates_sheet(service: Any, spreadsheet_id: str) -> None:
         ]
         
         # Write headers
-        service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range='ExchangeRates!A1:B1',
-            valueInputOption='RAW',
-            body={'values': headers}
-        ).execute()
+        _execute_request(
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range='ExchangeRates!A1:B1',
+                valueInputOption='RAW',
+                body={'values': headers}
+            )
+        )
         
         # Write formulas
-        service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range='ExchangeRates!A2:B4',
-            valueInputOption='USER_ENTERED',
-            body={'values': formulas}
-        ).execute()
+        _execute_request(
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range='ExchangeRates!A2:B4',
+                valueInputOption='USER_ENTERED',
+                body={'values': formulas}
+            )
+        )
         
         logger.info("ExchangeRates sheet initialized with GOOGLEFINANCE formulas")
         
@@ -182,7 +195,9 @@ def verify_sheets_setup() -> None:
             return
         
         # Get existing sheets
-        sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+        sheet_metadata = _execute_request(
+            service.spreadsheets().get(spreadsheetId=spreadsheet_id)
+        )
         sheets = sheet_metadata.get('sheets', [])
         existing_sheets = {s.get("properties", {}).get("title") for s in sheets}
         
@@ -198,17 +213,21 @@ def verify_sheets_setup() -> None:
                     }
                 }]
             }
-            service.spreadsheets().batchUpdate(
-                spreadsheetId=spreadsheet_id,
-                body=body
-            ).execute()
+            _execute_request(
+                service.spreadsheets().batchUpdate(
+                    spreadsheetId=spreadsheet_id,
+                    body=body
+                )
+            )
         
         # Set headers for full format (for dashboard compatibility)
         headers = [EXPENSE_HEADERS]
-        result = service.spreadsheets().values().get(
-            spreadsheetId=spreadsheet_id,
-            range='Expenses!A1:J'
-        ).execute()
+        result = _execute_request(
+            service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range='Expenses!A1:J'
+            )
+        )
         
         current_values = result.get('values', [])
         current_headers = current_values[0] if current_values else []
@@ -216,32 +235,40 @@ def verify_sheets_setup() -> None:
         if current_headers == OLD_EXPENSE_HEADERS:
             logger.info("Migrating Expenses sheet to split-aware schema...")
             migrated_rows = _migrate_expense_rows(current_values[1:])
-            service.spreadsheets().values().clear(
-                spreadsheetId=spreadsheet_id,
-                range='Expenses!A:J',
-                body={},
-            ).execute()
-            service.spreadsheets().values().update(
-                spreadsheetId=spreadsheet_id,
-                range='Expenses!A1:J1',
-                valueInputOption='RAW',
-                body={'values': headers},
-            ).execute()
-            if migrated_rows:
+            _execute_request(
+                service.spreadsheets().values().clear(
+                    spreadsheetId=spreadsheet_id,
+                    range='Expenses!A:J',
+                    body={},
+                )
+            )
+            _execute_request(
                 service.spreadsheets().values().update(
                     spreadsheetId=spreadsheet_id,
-                    range=f'Expenses!A2:J{len(migrated_rows) + 1}',
-                    valueInputOption='USER_ENTERED',
-                    body={'values': migrated_rows},
-                ).execute()
+                    range='Expenses!A1:J1',
+                    valueInputOption='RAW',
+                    body={'values': headers},
+                )
+            )
+            if migrated_rows:
+                _execute_request(
+                    service.spreadsheets().values().update(
+                        spreadsheetId=spreadsheet_id,
+                        range=f'Expenses!A2:J{len(migrated_rows) + 1}',
+                        valueInputOption='USER_ENTERED',
+                        body={'values': migrated_rows},
+                    )
+                )
         elif not current_headers or current_headers != headers[0]:
             logger.info("Setting up Expenses sheet headers...")
-            service.spreadsheets().values().update(
-                spreadsheetId=spreadsheet_id,
-                range='Expenses!A1:J1',
-                valueInputOption='RAW',
-                body={'values': headers}
-            ).execute()
+            _execute_request(
+                service.spreadsheets().values().update(
+                    spreadsheetId=spreadsheet_id,
+                    range='Expenses!A1:J1',
+                    valueInputOption='RAW',
+                    body={'values': headers}
+                )
+            )
         
         # Initialize ExchangeRates sheet
         initialize_exchange_rates_sheet(service, spreadsheet_id)
@@ -290,13 +317,15 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
 
     try:
         logger.info(f"Appending transactions to range: {range_name}")
-        result = service.spreadsheets().values().append(
-            spreadsheetId=spreadsheet_id,
-            range=range_name,
-            valueInputOption="USER_ENTERED",
-            insertDataOption="INSERT_ROWS",
-            body=body,
-        ).execute()
+        result = _execute_request(
+            service.spreadsheets().values().append(
+                spreadsheetId=spreadsheet_id,
+                range=range_name,
+                valueInputOption="USER_ENTERED",
+                insertDataOption="INSERT_ROWS",
+                body=body,
+            )
+        )
         logger.info(f"Successfully appended transactions: {result.get('updates', {})}")
     except Exception as e:
         logger.exception("Error appending transactions to Google Sheets")

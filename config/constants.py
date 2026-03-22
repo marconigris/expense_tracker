@@ -2,14 +2,11 @@ TRANSACTION_TYPES = ['Income', 'Expense', 'To Receive', 'To Pay']
 
 CATEGORIES = {
     'Expense': {
-        'Food': ['Groceries', 'Dining Out', 'Snacks'],
-        'Transportation': ['Fuel', 'Public Transit', 'Maintenance'],
-        'Housing': ['Rent', 'Utilities', 'Maintenance'],
-        'Entertainment': ['Movies', 'Games', 'Events'],
-        'Shopping': ['Clothes', 'Electronics', 'Home Items'],
-        'Healthcare': ['Medical', 'Pharmacy', 'Insurance'],
-        'Gift': ['Birthday', 'Wedding', 'Holiday', 'Other'],
-        'Other': ['Miscellaneous', 'Unspecified']
+        'Home': [],
+        'Food': [],
+        'Transport': [],
+        'Eating Out': [],
+        'Trips': [],
     },
     'Income': {
         'Salary': ['Regular', 'Bonus', 'Overtime'],

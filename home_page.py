@@ -31,13 +31,14 @@ EXPENSE_SUCCESS_MESSAGE_KEY = "expense_success_message"
 
 # ---------- UI HELPERS ----------
 
-def _render_currency_selector() -> str:
+def _render_currency_selector(label_visibility: str = "visible") -> str:
     """Render the currency picker as native segmented buttons."""
     return st.segmented_control(
         "Currency",
         ["USD", "EUR", "DOP"],
         selection_mode="single",
         key="expense_currency",
+        label_visibility=label_visibility,
     )
 
 
@@ -151,44 +152,6 @@ def _render_mobile_form_styles() -> None:
             background: transparent;
         }
 
-        .expense-shell {
-            display: grid;
-            gap: 0.9rem;
-            margin: 0.75rem 0 1rem;
-        }
-
-        .expense-hero {
-            border-radius: 1.6rem;
-            padding: 1rem 1rem 1.1rem;
-            background: linear-gradient(180deg, #101828 0%, #1f2937 100%);
-            color: #f8fafc;
-            box-shadow: 0 20px 44px rgba(15, 23, 42, 0.18);
-        }
-
-        .expense-hero-kicker {
-            font-size: 0.76rem;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            opacity: 0.72;
-            margin-bottom: 0.35rem;
-        }
-
-        .expense-hero-title {
-            font-size: 1.65rem;
-            line-height: 1.05;
-            font-weight: 800;
-            letter-spacing: -0.04em;
-        }
-
-        .expense-card {
-            border-radius: 1.6rem;
-            padding: 0.2rem 0.3rem 0.4rem;
-            background: linear-gradient(180deg, #ffffff 0%, #f4f6fb 100%);
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-        }
-
         div[data-testid="stNumberInput"] button {
             display: none;
         }
@@ -244,15 +207,6 @@ def _render_mobile_form_styles() -> None:
         }
 
         @media (max-width: 640px) {
-            .expense-hero,
-            .expense-card {
-                border-radius: 1.3rem;
-            }
-
-            .expense-hero-title {
-                font-size: 1.45rem;
-            }
-
             div[data-testid="stSegmentedControl"] button {
                 min-height: 2.75rem;
             }
@@ -264,19 +218,11 @@ def _render_mobile_form_styles() -> None:
 
 
 def _render_expense_intro() -> None:
-    st.markdown(
-        """
-        <div class="expense-shell">
-            <div class="expense-hero">
-            </div>
-            <div class="expense-card">
-        """,
-        unsafe_allow_html=True,
-    )
+    return None
 
 
 def _close_expense_card() -> None:
-    st.markdown("</div></div>", unsafe_allow_html=True)
+    return None
 
 
 def render_add_expense_form() -> None:
@@ -293,9 +239,10 @@ def render_add_expense_form() -> None:
         st.success(st.session_state[EXPENSE_SUCCESS_MESSAGE_KEY])
         st.session_state[EXPENSE_SUCCESS_MESSAGE_KEY] = ""
     
-    col1, col2 = st.columns([0.7, 1.3], gap="medium")
+    col1, col2 = st.columns([0.95, 1.05], gap="small")
     
     with col1:
+        st.caption("Amount")
         amount = st.number_input(
             "Amount",
             min_value=0.0,
@@ -306,10 +253,12 @@ def render_add_expense_form() -> None:
             key=EXPENSE_AMOUNT_KEY,
             on_change=_handle_total_amount_change,
             args=(username,),
+            label_visibility="collapsed",
         )
 
     with col2:
-        currency = _render_currency_selector()
+        st.caption("Currency")
+        currency = _render_currency_selector(label_visibility="collapsed")
 
     st.selectbox(
         "Category",
