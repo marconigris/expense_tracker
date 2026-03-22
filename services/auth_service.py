@@ -34,30 +34,46 @@ def load_authenticator():
     Load the authenticator with user credentials from secrets or file.
     """
     try:
+        config = None
+        
         # Try to load from Streamlit secrets first (production)
         if 'credentials' in st.secrets:
-            # Convert Streamlit secrets to plain dict recursively
-            secrets_dict = _convert_to_dict(dict(st.secrets))
-            
-            # Validate structure
-            if 'cookie' not in secrets_dict:
-                raise KeyError("'cookie' section not found in secrets")
-            if 'credentials' not in secrets_dict:
-                raise KeyError("'credentials' section not found in secrets")
-            
-            cookie = secrets_dict['cookie']
-            if not isinstance(cookie, dict) or 'name' not in cookie or 'key' not in cookie:
-                logger.error(f"Invalid cookie structure: {cookie}")
-                raise KeyError("Cookie must have 'name' and 'key' fields")
-            
-            config = {
-                'credentials': secrets_dict['credentials'],
-                'cookie': cookie
-            }
-        else:
-            # Fallback to file (local development)
+            try:
+                # Convert Streamlit secrets to plain dict recursively
+                secrets_dict = _convert_to_dict(dict(st.secrets))
+                
+                logger.info(f"Secrets loaded. Keys: {list(secrets_dict.keys())}")
+                
+                # Validate structure
+                if 'cookie' not in secrets_dict:
+                    raise KeyError("'cookie' section not found in secrets")
+                if 'credentials' not in secrets_dict:
+                    raise KeyError("'credentials' section not found in secrets")
+                
+                cookie = secrets_dict.get('cookie', {})
+                if not isinstance(cookie, dict):
+                    logger.error(f"Cookie is not a dict: {type(cookie)}")
+                    raise ValueError("Cookie must be a dictionary")
+                
+                if 'name' not in cookie:
+                    raise KeyError(f"'name' not in cookie. Cookie keys: {list(cookie.keys())}")
+                if 'key' not in cookie:
+                    raise KeyError(f"'key' not in cookie. Cookie keys: {list(cookie.keys())}")
+                
+                config = {
+                    'credentials': secrets_dict['credentials'],
+                    'cookie': cookie
+                }
+                logger.info("Successfully loaded config from secrets")
+            except Exception as secret_error:
+                logger.warning(f"Failed to load from secrets: {secret_error}. Trying file fallback...")
+                config = None
+        
+        # Fallback to file if secrets failed or not available
+        if config is None:
             with open(CREDENTIALS_PATH) as file:
                 config = yaml.safe_load(file)
+            logger.info("Loaded config from file")
         
         # Initialize authenticator
         authenticator = stauth.Authenticate(
