@@ -22,26 +22,22 @@ def render_add_expense_form() -> None:
     st.subheader("Add Expense")
     
     with st.form(key="add_expense_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            amount = st.number_input(
-                "Amount",
-                min_value=0.0,
-                step=0.01,
-                format="%.2f"
-            )
-        
-        with col2:
-            currency = st.selectbox(
-                "Currency",
-                ["USD", "EUR", "GBP", "ARS", "MXN", "BRL"],
-                index=0
-            )
+        amount = st.number_input(
+            "Amount",
+            min_value=0.0,
+            step=0.01,
+            format="%.2f"
+        )
         
         description = st.text_input(
             "Description",
             placeholder="e.g., Groceries, Gas, Coffee"
+        )
+        
+        currency = st.radio(
+            "Currency",
+            ["USD", "EUR", "DOP"],
+            horizontal=True
         )
         
         submitted = st.form_submit_button("✅ Add Expense", use_container_width=True)
