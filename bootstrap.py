@@ -22,9 +22,10 @@ def ensure_startup() -> bool:
     Returns:
         bool: True if user is authenticated and ready, False otherwise
     """
-    # Always render login first (at the top of the app)
-    if not is_authenticated():
-        render_login()
+    # Always render login first (at the top of the app).
+    # render_login() may restore the user from the authenticator cookie on refresh,
+    # so we should only stop if authentication still failed after that call.
+    if not is_authenticated() and not render_login():
         return False  # Stop rendering rest of app
     
     # User is authenticated, continue with normal startup
