@@ -9,7 +9,8 @@ from bootstrap import ensure_startup, render_global_header
 from services.google_sheets import append_transactions
 from services.auth_service import get_authenticated_username
 from config.exchange_rates import convert_to_usd
-from config.constants import CATEGORIES
+from config.constants import CATEGORIES, PROJECTS, DEFAULT_PROJECT
+from state import get_current_project
 
 log = setup_logging("expense_tracker_home")
 
@@ -28,6 +29,7 @@ SPLIT_MONI_AMOUNT_KEY = "split_moni_amount"
 LAST_SPLIT_EDITED_KEY = "last_split_edited"
 EXPENSE_SUCCESS_MESSAGE_KEY = "expense_success_message"
 RESET_EXPENSE_FORM_KEY = "reset_expense_form"
+LAST_PROJECT_KEY = "last_project"
 
 
 # ---------- UI HELPERS ----------
@@ -43,17 +45,21 @@ def _render_currency_selector(label_visibility: str = "visible") -> str:
     )
 
 
-def _initialize_expense_state(username: str) -> None:
+def _initialize_expense_state(username: str, project_name: str) -> None:
     st.session_state.setdefault(EXPENSE_AMOUNT_KEY, None)
     st.session_state.setdefault(EXPENSE_DESCRIPTION_KEY, "")
     st.session_state.setdefault(EXPENSE_CATEGORY_KEY, list(CATEGORIES["Expense"].keys())[0])
-    st.session_state.setdefault(EXPENSE_CURRENCY_KEY, "USD")
+    st.session_state.setdefault(EXPENSE_CURRENCY_KEY, PROJECTS[project_name]["default_currency"])
     st.session_state.setdefault(SHARED_EXPENSE_KEY, False)
     st.session_state.setdefault(SPLIT_MARCO_AMOUNT_KEY, 0.0)
     st.session_state.setdefault(SPLIT_MONI_AMOUNT_KEY, 0.0)
     st.session_state.setdefault(LAST_SPLIT_EDITED_KEY, "")
     st.session_state.setdefault(EXPENSE_SUCCESS_MESSAGE_KEY, "")
     st.session_state.setdefault(RESET_EXPENSE_FORM_KEY, False)
+    last_project = st.session_state.get(LAST_PROJECT_KEY)
+    if last_project != project_name:
+        st.session_state[EXPENSE_CURRENCY_KEY] = PROJECTS[project_name]["default_currency"]
+        st.session_state[LAST_PROJECT_KEY] = project_name
     _set_default_split_amounts(username, preserve_manual=False)
 
 
@@ -140,13 +146,14 @@ def _reset_expense_form(username: str) -> None:
     st.session_state[RESET_EXPENSE_FORM_KEY] = True
 
 
-def _apply_pending_reset(username: str) -> None:
+def _apply_pending_reset(username: str, project_name: str) -> None:
     if not st.session_state.get(RESET_EXPENSE_FORM_KEY):
         return
 
     st.session_state[EXPENSE_AMOUNT_KEY] = None
     st.session_state[EXPENSE_DESCRIPTION_KEY] = ""
     st.session_state[SHARED_EXPENSE_KEY] = False
+    st.session_state[EXPENSE_CURRENCY_KEY] = PROJECTS[project_name]["default_currency"]
     st.session_state[RESET_EXPENSE_FORM_KEY] = False
     _set_default_split_amounts(username, preserve_manual=False)
 
@@ -242,9 +249,10 @@ def render_add_expense_form() -> None:
     
     # Get username from authenticated session
     username = get_authenticated_username()
+    current_project = get_current_project()
     expense_categories = CATEGORIES["Expense"]
-    _initialize_expense_state(username)
-    _apply_pending_reset(username)
+    _initialize_expense_state(username, current_project)
+    _apply_pending_reset(username, current_project)
 
     if st.session_state.get(EXPENSE_SUCCESS_MESSAGE_KEY):
         st.success(st.session_state[EXPENSE_SUCCESS_MESSAGE_KEY])
@@ -320,6 +328,7 @@ def render_add_expense_form() -> None:
                 description,
                 currency,
                 st.session_state[EXPENSE_CATEGORY_KEY],
+                current_project,
                 username,
                 marco_share,
                 moni_share,
@@ -343,6 +352,7 @@ def _save_expense(
     description: str,
     currency: str,
     category: str,
+    project: str,
     user: str,
     marco_share: int,
     moni_share: int,
@@ -362,6 +372,7 @@ def _save_expense(
             description,                   # Description
             amount,                        # Currency Amount (original input)
             currency,                      # Currency
+            project,                       # Project
             user,                          # User
             marco_share,                   # Marco Split %
             moni_share,                    # Moni Split %

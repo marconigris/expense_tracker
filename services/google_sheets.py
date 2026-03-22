@@ -6,6 +6,7 @@ from typing import Any, List
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import streamlit as st
+from config.constants import DEFAULT_PROJECT
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,20 @@ OLD_EXPENSE_HEADERS = [
 ]
 
 EXPENSE_HEADERS = [
+    'Date',
+    'Amount',
+    'Type',
+    'Category',
+    'Description',
+    'Currency Amount',
+    'Currency',
+    'Project',
+    'User',
+    'Marco Split %',
+    'Moni Split %',
+]
+
+SPLIT_EXPENSE_HEADERS = [
     'Date',
     'Amount',
     'Type',
@@ -62,9 +77,30 @@ def _migrate_expense_rows(existing_rows: list[list[str]]) -> list[list[Any]]:
             padded_row[5],
             padded_row[6],
             padded_row[7],
+            DEFAULT_PROJECT,
             user,
             marco_split,
             moni_split,
+        ])
+    return migrated_rows
+
+
+def _migrate_split_rows(existing_rows: list[list[str]]) -> list[list[Any]]:
+    migrated_rows: list[list[Any]] = []
+    for row in existing_rows:
+        padded_row = row + [''] * max(0, len(SPLIT_EXPENSE_HEADERS) - len(row))
+        migrated_rows.append([
+            padded_row[0],
+            padded_row[1],
+            padded_row[2],
+            padded_row[3],
+            padded_row[4],
+            padded_row[5],
+            padded_row[6],
+            DEFAULT_PROJECT,
+            padded_row[7],
+            padded_row[8],
+            padded_row[9],
         ])
     return migrated_rows
 
@@ -225,7 +261,7 @@ def verify_sheets_setup() -> None:
         result = _execute_request(
             service.spreadsheets().values().get(
                 spreadsheetId=spreadsheet_id,
-                range='Expenses!A1:J'
+                range='Expenses!A1:K'
             )
         )
         
@@ -238,14 +274,14 @@ def verify_sheets_setup() -> None:
             _execute_request(
                 service.spreadsheets().values().clear(
                     spreadsheetId=spreadsheet_id,
-                    range='Expenses!A:J',
+                    range='Expenses!A:K',
                     body={},
                 )
             )
             _execute_request(
                 service.spreadsheets().values().update(
                     spreadsheetId=spreadsheet_id,
-                    range='Expenses!A1:J1',
+                    range='Expenses!A1:K1',
                     valueInputOption='RAW',
                     body={'values': headers},
                 )
@@ -254,7 +290,34 @@ def verify_sheets_setup() -> None:
                 _execute_request(
                     service.spreadsheets().values().update(
                         spreadsheetId=spreadsheet_id,
-                        range=f'Expenses!A2:J{len(migrated_rows) + 1}',
+                        range=f'Expenses!A2:K{len(migrated_rows) + 1}',
+                        valueInputOption='USER_ENTERED',
+                        body={'values': migrated_rows},
+                    )
+                )
+        elif current_headers == SPLIT_EXPENSE_HEADERS:
+            logger.info("Adding Project column to Expenses sheet...")
+            migrated_rows = _migrate_split_rows(current_values[1:])
+            _execute_request(
+                service.spreadsheets().values().clear(
+                    spreadsheetId=spreadsheet_id,
+                    range='Expenses!A:K',
+                    body={},
+                )
+            )
+            _execute_request(
+                service.spreadsheets().values().update(
+                    spreadsheetId=spreadsheet_id,
+                    range='Expenses!A1:K1',
+                    valueInputOption='RAW',
+                    body={'values': headers},
+                )
+            )
+            if migrated_rows:
+                _execute_request(
+                    service.spreadsheets().values().update(
+                        spreadsheetId=spreadsheet_id,
+                        range=f'Expenses!A2:K{len(migrated_rows) + 1}',
                         valueInputOption='USER_ENTERED',
                         body={'values': migrated_rows},
                     )
@@ -264,7 +327,7 @@ def verify_sheets_setup() -> None:
             _execute_request(
                 service.spreadsheets().values().update(
                     spreadsheetId=spreadsheet_id,
-                    range='Expenses!A1:J1',
+                    range='Expenses!A1:K1',
                     valueInputOption='RAW',
                     body={'values': headers}
                 )
@@ -313,7 +376,7 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
     
     # Ensure range_name specifies just the columns, not rows (let Google Sheets find next empty row)
     if "!" not in range_name:
-        range_name = f"{range_name}!A:J"  # Columns A-J for split-aware expense schema
+        range_name = f"{range_name}!A:K"  # Columns A-K for project-aware expense schema
 
     try:
         logger.info(f"Appending transactions to range: {range_name}")

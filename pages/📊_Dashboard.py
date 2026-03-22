@@ -9,6 +9,9 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build # type: ignore
 from dotenv import load_dotenv
 from utils.logging_utils import setup_logging
+from bootstrap import ensure_startup
+from state import get_current_project
+from config.constants import DEFAULT_PROJECT
 
 log = setup_logging("expense_tracker_analytics")
 
@@ -32,6 +35,7 @@ TRANSACTION_COLUMNS = [
     'Description',
     'Currency Amount',
     'Currency',
+    'Project',
     'User',
     'Marco Split %',
     'Moni Split %',
@@ -230,7 +234,7 @@ def get_transactions_data():
         log.debug("Fetching transactions data from Google Sheets")
         result = service.spreadsheets().values().get(
             spreadsheetId=SHEET_ID,
-            range='Expenses!A1:J'
+            range='Expenses!A1:K'
         ).execute()
         
         values = result.get('values', [])
@@ -318,6 +322,9 @@ def get_date_filters(key:str="unique_global_filter"):
     
     # Get min and max dates from the data
     df = get_transactions_data()
+    current_project = get_current_project()
+    if 'Project' in df.columns:
+        df = df[df['Project'].fillna(DEFAULT_PROJECT).replace('', DEFAULT_PROJECT) == current_project]
     if not df.empty:
         df = df.copy()
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
@@ -649,6 +656,9 @@ def show_pending_transactions():
 
 def show_analytics():
     try:
+        if not ensure_startup():
+            return
+
         # Add regenerate button in the header
         col1, col2 = st.columns([6, 1])
         with col2:
@@ -665,6 +675,8 @@ def show_analytics():
         if not df.empty:
             df['Amount'] = pd.to_numeric(df['Amount'])
             df['Date'] = pd.to_datetime(df['Date'])
+            df['Project'] = df['Project'].fillna(DEFAULT_PROJECT).replace('', DEFAULT_PROJECT)
+            df = df[df['Project'] == get_current_project()]
             filtered_df = filter_dataframe(df, start_date, end_date)
         else:
             filtered_df = df

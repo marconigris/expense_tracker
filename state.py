@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 import streamlit as st
+from config.constants import DEFAULT_PROJECT
 
 
 # ---------- KEYS ----------
@@ -9,6 +10,7 @@ import streamlit as st
 MESSAGES_KEY = "messages"
 CURRENT_TRANSACTION_KEY = "current_transaction"
 SHEETS_VERIFIED_KEY = "sheets_verified"
+CURRENT_PROJECT_KEY = "current_project"
 
 
 # ---------- INIT ----------
@@ -23,6 +25,9 @@ def init_session_state() -> None:
 
     if SHEETS_VERIFIED_KEY not in st.session_state:
         st.session_state[SHEETS_VERIFIED_KEY] = False
+
+    if CURRENT_PROJECT_KEY not in st.session_state:
+        st.session_state[CURRENT_PROJECT_KEY] = DEFAULT_PROJECT
 
 
 # ---------- MESSAGES HELPERS ----------
@@ -63,3 +68,11 @@ def is_sheets_verified() -> bool:
 
 def set_sheets_verified(value: bool = True) -> None:
     st.session_state[SHEETS_VERIFIED_KEY] = value
+
+
+def get_current_project() -> str:
+    return st.session_state.get(CURRENT_PROJECT_KEY, DEFAULT_PROJECT)
+
+
+def set_current_project(project: str) -> None:
+    st.session_state[CURRENT_PROJECT_KEY] = project

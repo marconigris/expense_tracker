@@ -1,5 +1,16 @@
 TRANSACTION_TYPES = ['Income', 'Expense', 'To Receive', 'To Pay']
 
+DEFAULT_PROJECT = "Cabarete"
+
+PROJECTS = {
+    "Cabarete": {
+        "default_currency": "USD",
+    },
+    "Hymerlife": {
+        "default_currency": "EUR",
+    },
+}
+
 CATEGORIES = {
     'Expense': {
         'Home': [],
