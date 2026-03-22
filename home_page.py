@@ -179,7 +179,6 @@ def _render_expense_intro() -> None:
         <div class="expense-shell">
             <div class="expense-hero">
                 <div class="expense-hero-kicker">Quick Add</div>
-                <div class="expense-hero-title">Track an expense in a few taps</div>
             </div>
             <div class="expense-card">
         """,
