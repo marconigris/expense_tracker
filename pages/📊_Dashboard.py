@@ -319,11 +319,19 @@ def get_date_filters(key:str="unique_global_filter"):
     # Get min and max dates from the data
     df = get_transactions_data()
     if not df.empty:
-        df['Date'] = pd.to_datetime(df['Date'])
-        min_date = df['Date'].min()
-        max_date = df['Date'].max()
+        df = df.copy()
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        valid_dates = df['Date'].dropna()
+        if valid_dates.empty:
+            min_date = max_date = datetime.now()
+            available_years = [datetime.now().year]
+        else:
+            min_date = valid_dates.min()
+            max_date = valid_dates.max()
+            available_years = sorted(valid_dates.dt.year.unique(), reverse=True)
     else:
         min_date = max_date = datetime.now()
+        available_years = [datetime.now().year]
     
     # Filter type selection with unique key
     st.session_state.global_filter_type = st.sidebar.radio(
@@ -335,7 +343,7 @@ def get_date_filters(key:str="unique_global_filter"):
     if st.session_state.global_filter_type == "Year":
         st.session_state.global_selected_year = st.sidebar.selectbox(
             "Select Year",
-            sorted(df['Date'].dt.year.unique(), reverse=True),
+            available_years,
             key="unique_global_year"
         )
         start_date = datetime(st.session_state.global_selected_year, 1, 1)
@@ -344,7 +352,7 @@ def get_date_filters(key:str="unique_global_filter"):
     elif st.session_state.global_filter_type == "Month":
         st.session_state.global_selected_year = st.sidebar.selectbox(
             "Select Year",
-            sorted(df['Date'].dt.year.unique(), reverse=True),
+            available_years,
             key="unique_global_month_year"
         )
         st.session_state.global_selected_month = st.sidebar.selectbox(
@@ -676,7 +684,7 @@ def show_analytics():
         
         log.info("📊 Analytics visualizations generated successfully")
     except Exception as e:
-        log.error(f"❌ Failed to generate analytics: {str(e)}")
+        log.error(f"❌ Failed to generate analytics: {str(e)}", exc_info=True)
         st.error("Failed to generate analytics. Please try again later.")
         
 if __name__ == "__main__":
