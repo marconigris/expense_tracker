@@ -19,6 +19,13 @@ def render_add_expense_form() -> None:
     """Render the form to add a new expense."""
     st.subheader("Add Expense")
     
+    # Get username from Streamlit secrets
+    try:
+        username = st.secrets.get("USERNAME", "")
+    except FileNotFoundError:
+        import os
+        username = os.getenv("USERNAME", "")
+    
     with st.form(key="add_expense_form", clear_on_submit=True):
         amount = st.number_input(
             "Amount",
@@ -38,23 +45,17 @@ def render_add_expense_form() -> None:
             horizontal=True
         )
         
-        user = st.text_input(
-            "Your Name",
-            placeholder="e.g., Marco, Juan",
-            key="expense_user"
-        )
-        
         submitted = st.form_submit_button("✅ Add Expense", use_container_width=True)
         
         if submitted:
-            if amount > 0 and description and user:
-                _save_expense(amount, description, currency, user)
+            if amount > 0 and description and username:
+                _save_expense(amount, description, currency, username)
             elif amount == 0:
                 st.error("Please enter an amount greater than 0")
             elif not description:
                 st.error("Please enter a description")
             else:
-                st.error("Please enter your name")
+                st.error("USERNAME not configured in Streamlit secrets")
 
 
 def _save_expense(amount: float, description: str, currency: str, user: str) -> None:
