@@ -19,14 +19,28 @@ def render_sidebar_navigation() -> None:
 
     st.sidebar.markdown("### Projects")
     for project_name in PROJECTS:
-        button_type = "primary" if current_project == project_name else "secondary"
-        if st.sidebar.button(project_name, key=f"nav_project_{project_name}", use_container_width=True, type=button_type):
+        is_active_project = current_project == project_name
+        st.sidebar.markdown(f"**{project_name}**")
+
+        add_expense_type = "primary" if is_active_project else "secondary"
+        if st.sidebar.button(
+            "Add Expense",
+            key=f"nav_add_expense_{project_name}",
+            use_container_width=True,
+            type=add_expense_type,
+        ):
             set_current_project(project_name)
             st.switch_page("Home.py")
 
-    st.sidebar.markdown("### Analytics")
-    if st.sidebar.button("Dashboard", key="nav_dashboard", use_container_width=True):
-        st.switch_page("pages/📊_Dashboard.py")
+        if st.sidebar.button(
+            "Dashboard",
+            key=f"nav_dashboard_{project_name}",
+            use_container_width=True,
+        ):
+            set_current_project(project_name)
+            st.switch_page("pages/📊_Dashboard.py")
+
+        st.sidebar.markdown("")
 
 
 def ensure_startup() -> bool:

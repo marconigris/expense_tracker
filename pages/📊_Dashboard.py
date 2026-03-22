@@ -681,14 +681,6 @@ def show_analytics():
         if not ensure_startup():
             return
 
-        # Add regenerate button in the header
-        col1, col2 = st.columns([6, 1])
-        with col2:
-            if st.button("🔄 Refresh", use_container_width=True):
-                get_transactions_data.clear()
-                get_pending_transactions.clear()
-                st.rerun()
-        
         # Get date filters once for all tabs
         start_date, end_date = get_date_filters(key="global_analytics_filter")
         
@@ -707,14 +699,12 @@ def show_analytics():
         st.caption(f"Showing data from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
         
         # Show tabs for different sections
-        tab1, tab2, tab3 = st.tabs(["Overview", "Expense Analytics", "Pending Transactions"])
+        tab1, tab2 = st.tabs(["Overview", "Expense Analytics"])
         
         with tab1:
             show_overview_analytics(filtered_df, start_date, end_date)
         with tab2:
             show_expense_analytics(filtered_df, start_date, end_date)
-        with tab3:
-            show_pending_transactions()
         
         log.info("📊 Analytics visualizations generated successfully")
     except Exception as e:
