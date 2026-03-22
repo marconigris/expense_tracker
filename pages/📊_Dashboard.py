@@ -814,9 +814,8 @@ def show_analytics():
 
         project_name = get_current_project()
         render_global_header()
-        if is_personal_project(project_name):
-            render_project_balance_banner(project_name)
-        else:
+        render_project_balance_banner(project_name)
+        if not is_personal_project(project_name):
             render_top_view_navigation("Balances")
 
         raw_df = get_transactions_data(project_name)

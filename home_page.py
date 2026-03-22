@@ -444,8 +444,7 @@ def render() -> None:
     
     render_global_header()
     current_project = get_current_project()
-    if is_personal_project(current_project):
-        render_project_balance_banner(current_project)
-    else:
+    render_project_balance_banner(current_project)
+    if not is_personal_project(current_project):
         render_top_view_navigation("Expense")
     render_add_expense_form()

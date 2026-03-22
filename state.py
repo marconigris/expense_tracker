@@ -12,6 +12,8 @@ CURRENT_TRANSACTION_KEY = "current_transaction"
 SHEETS_VERIFIED_KEY = "sheets_verified"
 CURRENT_PROJECT_KEY = "current_project"
 LOGOUT_KEY = "logout"
+SIDEBAR_AUTOCLOSE_KEY = "sidebar_autoclose"
+SIDEBAR_AUTOCLOSE_COUNT_KEY = "sidebar_autoclose_count"
 
 
 # ---------- INIT ----------
@@ -32,6 +34,12 @@ def init_session_state() -> None:
 
     if LOGOUT_KEY not in st.session_state:
         st.session_state[LOGOUT_KEY] = False
+
+    if SIDEBAR_AUTOCLOSE_KEY not in st.session_state:
+        st.session_state[SIDEBAR_AUTOCLOSE_KEY] = False
+
+    if SIDEBAR_AUTOCLOSE_COUNT_KEY not in st.session_state:
+        st.session_state[SIDEBAR_AUTOCLOSE_COUNT_KEY] = 0
 
 
 # ---------- MESSAGES HELPERS ----------
@@ -80,3 +88,18 @@ def get_current_project() -> str:
 
 def set_current_project(project: str) -> None:
     st.session_state[CURRENT_PROJECT_KEY] = project
+
+
+def set_sidebar_autoclose_pending(value: bool = True) -> None:
+    st.session_state[SIDEBAR_AUTOCLOSE_KEY] = value
+    if value:
+        st.session_state[SIDEBAR_AUTOCLOSE_COUNT_KEY] = int(
+            st.session_state.get(SIDEBAR_AUTOCLOSE_COUNT_KEY, 0)
+        ) + 1
+
+
+def consume_sidebar_autoclose() -> tuple[bool, int]:
+    should_close = bool(st.session_state.get(SIDEBAR_AUTOCLOSE_KEY, False))
+    event_count = int(st.session_state.get(SIDEBAR_AUTOCLOSE_COUNT_KEY, 0))
+    st.session_state[SIDEBAR_AUTOCLOSE_KEY] = False
+    return should_close, event_count

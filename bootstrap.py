@@ -3,12 +3,19 @@ from __future__ import annotations
 from typing import Optional
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from services.google_sheets import get_sheet_url
 from services.auth_service import render_login, render_logout, get_authenticated_username, is_authenticated
-from services.project_summary import get_personal_account_summary
+from services.project_summary import get_personal_account_summary, get_shared_account_summary
 from utils.logging_utils import setup_logging
-from state import init_session_state, get_current_project, set_current_project
+from state import (
+    init_session_state,
+    get_current_project,
+    set_current_project,
+    set_sidebar_autoclose_pending,
+    consume_sidebar_autoclose,
+)
 from config.constants import DEFAULT_PROJECT, get_visible_projects, is_personal_project, get_project_config
 
 log = setup_logging("expense_tracker_bootstrap")
@@ -35,6 +42,7 @@ def render_sidebar_navigation() -> None:
             type=button_type,
         ):
             set_current_project(project_name)
+            set_sidebar_autoclose_pending(True)
             st.switch_page("Home.py")
 
 
@@ -87,8 +95,45 @@ def ensure_startup() -> bool:
     # User is authenticated, continue with normal startup
     render_sidebar_navigation()
     render_sidebar_footer()
+    _render_sidebar_autoclose_script()
 
     return True
+
+
+def _render_sidebar_autoclose_script() -> None:
+    """Collapse the Streamlit sidebar once after a sidebar navigation click."""
+    should_close, event_count = consume_sidebar_autoclose()
+    if not should_close:
+        return
+
+    components.html(
+        f"""
+        <script>
+        const sidebarAutoCloseEvent = {event_count};
+        const selectors = [
+          'button[aria-label="Close sidebar"]',
+          'button[data-testid="stSidebarCollapseButton"]',
+          '[data-testid="stSidebarCollapseButton"] button',
+          'button[kind="header"][aria-label*="sidebar"]'
+        ];
+
+        const collapseSidebar = () => {{
+          const parentDocument = window.parent.document;
+          const collapseButton = selectors
+            .map((selector) => parentDocument.querySelector(selector))
+            .find(Boolean);
+
+          if (collapseButton) {{
+            collapseButton.click();
+          }}
+        }};
+
+        window.setTimeout(collapseSidebar, 80);
+        console.debug("sidebar-autoclose", sidebarAutoCloseEvent);
+        </script>
+        """,
+        height=0,
+    )
 
 
 def get_main_sheet_url() -> Optional[str]:
@@ -145,21 +190,41 @@ def _format_currency(amount: float, currency: str) -> str:
 
 
 def render_project_balance_banner(project_name: str) -> None:
-    """Show a focused account-balance banner for personal projects."""
-    if not is_personal_project(project_name):
-        return
-
     project_currency = get_project_config(project_name)["default_currency"]
     try:
-        summary = get_personal_account_summary(project_name)
-        balance_value = _format_currency(float(summary["net_balance"]), str(summary["currency"]))
-        income_value = _format_currency(float(summary["income_total"]), str(summary["currency"]))
-        expense_value = _format_currency(float(summary["expense_total"]), str(summary["currency"]))
+        if is_personal_project(project_name):
+            summary = get_personal_account_summary(project_name)
+            banner_label = "Total Balance"
+            balance_value = _format_currency(float(summary["net_balance"]), str(summary["currency"]))
+            meta_values = [
+                f"Income {_format_currency(float(summary['income_total']), str(summary['currency']))}",
+                f"Expenses {_format_currency(float(summary['expense_total']), str(summary['currency']))}",
+            ]
+        else:
+            summary = get_shared_account_summary(project_name)
+            banner_label = "Total Expenses"
+            balance_value = _format_currency(float(summary["total_expense"]), str(summary["currency"]))
+            meta_values = [
+                f"Marco {_format_currency(float(summary['marco_paid']), str(summary['currency']))}",
+                f"Moni {_format_currency(float(summary['moni_paid']), str(summary['currency']))}",
+                str(summary["settlement_message"]),
+            ]
     except Exception as error:
-        log.warning("Failed to load personal account summary for %s: %s", project_name, error)
+        log.warning("Failed to load project summary for %s: %s", project_name, error)
         balance_value = _format_currency(0.0, project_currency)
-        income_value = _format_currency(0.0, project_currency)
-        expense_value = _format_currency(0.0, project_currency)
+        if is_personal_project(project_name):
+            banner_label = "Total Balance"
+            meta_values = [
+                f"Income {_format_currency(0.0, project_currency)}",
+                f"Expenses {_format_currency(0.0, project_currency)}",
+            ]
+        else:
+            banner_label = "Total Expenses"
+            meta_values = [
+                f"Marco {_format_currency(0.0, project_currency)}",
+                f"Moni {_format_currency(0.0, project_currency)}",
+                "Marco and Moni are settled up",
+            ]
 
     st.markdown(
         f"""
@@ -201,6 +266,10 @@ def render_project_balance_banner(project_name: str) -> None:
             opacity: 0.9;
         }}
 
+        .account-balance-meta span {{
+            white-space: nowrap;
+        }}
+
         @media (max-width: 640px) {{
             .account-balance-banner {{
                 border-radius: 1.25rem;
@@ -213,11 +282,10 @@ def render_project_balance_banner(project_name: str) -> None:
         }}
         </style>
         <div class="account-balance-banner">
-            <div class="account-balance-label">Total Balance</div>
+            <div class="account-balance-label">{banner_label}</div>
             <div class="account-balance-value">{balance_value}</div>
             <div class="account-balance-meta">
-                <span>Income {income_value}</span>
-                <span>Expenses {expense_value}</span>
+                {''.join(f'<span>{value}</span>' for value in meta_values)}
             </div>
         </div>
         """,

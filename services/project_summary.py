@@ -84,24 +84,7 @@ def _normalize_project_amounts(df: pd.DataFrame, project_name: str) -> pd.DataFr
 
 
 def get_personal_account_summary(project_name: str) -> dict[str, float | str]:
-    service = get_sheets_service()
-    spreadsheet_id = _get_spreadsheet_id()
-
-    try:
-        result = service.spreadsheets().values().get(
-            spreadsheetId=spreadsheet_id,
-            range=f'{project_name}!A1:J'
-        ).execute()
-    except Exception as error:
-        if "Unable to parse range" in str(error) and verify_sheets_setup():
-            result = service.spreadsheets().values().get(
-                spreadsheetId=spreadsheet_id,
-                range=f'{project_name}!A1:J'
-            ).execute()
-        else:
-            raise
-
-    values = result.get('values', [])
+    values = _get_project_sheet_values(project_name)
     if not values:
         return {
             "currency": get_project_config(project_name)["default_currency"],
@@ -120,4 +103,81 @@ def get_personal_account_summary(project_name: str) -> dict[str, float | str]:
         "income_total": float(income_total),
         "expense_total": float(expense_total),
         "net_balance": float(income_total - expense_total),
+    }
+
+
+def _get_project_sheet_values(project_name: str) -> list[list[str]]:
+    service = get_sheets_service()
+    spreadsheet_id = _get_spreadsheet_id()
+
+    try:
+        result = service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id,
+            range=f'{project_name}!A1:J'
+        ).execute()
+    except Exception as error:
+        if "Unable to parse range" in str(error) and verify_sheets_setup():
+            result = service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=f'{project_name}!A1:J'
+            ).execute()
+        else:
+            raise
+
+    return result.get('values', [])
+
+
+def get_shared_account_summary(project_name: str) -> dict[str, float | str]:
+    values = _get_project_sheet_values(project_name)
+    if not values:
+        return {
+            "currency": get_project_config(project_name)["default_currency"],
+            "total_expense": 0.0,
+            "marco_paid": 0.0,
+            "moni_paid": 0.0,
+            "settlement_message": "Marco and Moni are settled up",
+        }
+
+    df = _normalize_transactions_dataframe(values)
+    df = _normalize_project_amounts(df, project_name)
+    expense_df = df[df['Type'] == 'Expense'].copy()
+    if expense_df.empty:
+        return {
+            "currency": get_project_config(project_name)["default_currency"],
+            "total_expense": 0.0,
+            "marco_paid": 0.0,
+            "moni_paid": 0.0,
+            "settlement_message": "Marco and Moni are settled up",
+        }
+
+    normalized_users = expense_df['User'].fillna('').str.strip().str.lower()
+    marco_share = pd.to_numeric(expense_df['Marco Split %'], errors='coerce').fillna(0.0)
+    moni_share = pd.to_numeric(expense_df['Moni Split %'], errors='coerce').fillna(0.0)
+
+    no_split_data = (marco_share + moni_share) == 0
+    marco_share = marco_share.where(~no_split_data, (normalized_users == 'marconigris').astype(float) * 100)
+    moni_share = moni_share.where(~no_split_data, (normalized_users == 'monigila').astype(float) * 100)
+
+    marco_paid = float((expense_df['Amount'] * (marco_share / 100)).sum())
+    moni_paid = float((expense_df['Amount'] * (moni_share / 100)).sum())
+    total_expense = float(expense_df['Amount'].sum())
+    equal_share = total_expense / 2
+    marco_net = marco_paid - equal_share
+    moni_net = moni_paid - equal_share
+
+    if abs(marco_net) < 0.01 and abs(moni_net) < 0.01:
+        settlement_message = "Marco and Moni are settled up"
+    elif marco_net > 0 and moni_net < 0:
+        settlement_message = f"Moni owes Marco {abs(moni_net):,.2f}"
+    elif moni_net > 0 and marco_net < 0:
+        settlement_message = f"Marco owes Moni {abs(marco_net):,.2f}"
+    else:
+        settlement_message = "Split data needs review"
+
+    return {
+        "currency": get_project_config(project_name)["default_currency"],
+        "total_expense": total_expense,
+        "marco_paid": marco_paid,
+        "moni_paid": moni_paid,
+        "settlement_message": settlement_message,
     }
