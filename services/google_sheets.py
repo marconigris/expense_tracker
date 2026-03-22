@@ -192,6 +192,10 @@ def _execute_request(request: Any, num_retries: int = 3) -> Any:
     return request.execute(num_retries=num_retries)
 
 
+def _is_missing_range_error(error: Exception) -> bool:
+    return "Unable to parse range" in str(error)
+
+
 @st.cache_resource
 def get_sheets_service():
     """Cache Google Sheets service configuration."""
@@ -295,7 +299,7 @@ def initialize_exchange_rates_sheet(service: Any, spreadsheet_id: str) -> None:
         # Don't raise - this is not critical
 
 
-def verify_sheets_setup() -> None:
+def verify_sheets_setup() -> bool:
     """
     Verify and initialize Google Sheets with correct headers.
     Creates or updates the Expenses sheet and initializes exchange rates.
@@ -310,7 +314,7 @@ def verify_sheets_setup() -> None:
         
         if not spreadsheet_id:
             logger.error(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment")
-            return
+            return False
         
         # Get existing sheets
         sheet_metadata = _execute_request(
@@ -373,9 +377,10 @@ def verify_sheets_setup() -> None:
         initialize_exchange_rates_sheet(service, spreadsheet_id)
         
         logger.info("Google Sheets setup verified")
+        return True
     except Exception as e:
         logger.exception("Error verifying Google Sheets service")
-        # No relanzamos para que la app pueda seguir levantando
+        return False
 
 
 def get_sheet_url() -> str | None:
@@ -427,5 +432,19 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
         )
         logger.info(f"Successfully appended transactions: {result.get('updates', {})}")
     except Exception as e:
+        if _is_missing_range_error(e):
+            logger.warning(f"Missing sheet range detected for {range_name}. Re-verifying sheet setup and retrying once.")
+            if verify_sheets_setup():
+                result = _execute_request(
+                    service.spreadsheets().values().append(
+                        spreadsheetId=spreadsheet_id,
+                        range=range_name,
+                        valueInputOption="USER_ENTERED",
+                        insertDataOption="INSERT_ROWS",
+                        body=body,
+                    )
+                )
+                logger.info(f"Successfully appended transactions after sheet setup retry: {result.get('updates', {})}")
+                return
         logger.exception("Error appending transactions to Google Sheets")
         raise e

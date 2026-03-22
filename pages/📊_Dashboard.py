@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from utils.logging_utils import setup_logging
 from bootstrap import ensure_startup
 from state import get_current_project
+from services.google_sheets import verify_sheets_setup
 
 log = setup_logging("expense_tracker_analytics")
 
@@ -256,6 +257,17 @@ def get_transactions_data(project_name: str):
         log.info(f" Retrieved {len(values)-1} transaction records")
         return normalize_transactions_dataframe(values)
     except Exception as e:
+        if "Unable to parse range" in str(e):
+            log.warning(f"Missing range for project {project_name}. Re-verifying sheet setup and retrying once.")
+            if verify_sheets_setup():
+                result = service.spreadsheets().values().get(
+                    spreadsheetId=SHEET_ID,
+                    range=f'{project_name}!A1:J'
+                ).execute()
+                values = result.get('values', [])
+                if not values:
+                    return pd.DataFrame(columns=TRANSACTION_COLUMNS)
+                return normalize_transactions_dataframe(values)
         log.error(f"❌ Failed to fetch transactions data: {str(e)}")
         raise
 

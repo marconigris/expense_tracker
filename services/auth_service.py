@@ -149,8 +149,10 @@ def render_logout():
     Render the logout button in the sidebar.
     """
     try:
+        if not st.session_state.get("authentication_status"):
+            return
         authenticator = load_authenticator()
-        authenticator.logout('logout', 'sidebar')
+        authenticator.logout('Logout', 'sidebar', key='logout_button')
     except Exception as e:
         logger.error(f"Logout error: {e}")
 

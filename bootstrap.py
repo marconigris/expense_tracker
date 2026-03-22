@@ -52,9 +52,11 @@ def ensure_startup() -> bool:
 
     if not is_sheets_verified():
         log.info("Verifying Google Sheets setup...")
-        verify_sheets_setup()
-        set_sheets_verified(True)
-        log.info("Google Sheets setup verified.")
+        if verify_sheets_setup():
+            set_sheets_verified(True)
+            log.info("Google Sheets setup verified.")
+        else:
+            log.warning("Google Sheets setup could not be fully verified on this run.")
     
     return True
 
