@@ -11,5 +11,10 @@
     "autoDocstring.includeExtendedSummary": true,
     "autoDocstring.includeName": true,
     "autoDocstring.logLevel": "Debug",
-    "autoDocstring.startOnNewLine": true
+    "autoDocstring.startOnNewLine": true,
+    "chat.tools.terminal.autoApprove": {
+        "git add": true,
+        "git commit": true,
+        "git push": true
+    }
 }

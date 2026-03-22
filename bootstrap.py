@@ -61,7 +61,7 @@ def render_global_header() -> None:
     username = get_authenticated_username()
     
     if username:
-        st.write(f"¡Hola, **{username}**! 👋", help=None)
+        st.write(f"¡Hola, **{username}**! 👋")
     
     sheet_url = get_main_sheet_url()
     if sheet_url:
