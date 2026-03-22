@@ -22,9 +22,10 @@ def load_authenticator():
     try:
         # Try to load from Streamlit secrets first (production)
         if 'credentials' in st.secrets:
+            secrets_dict = dict(st.secrets)
             config = {
-                'credentials': st.secrets['credentials'],
-                'cookie': st.secrets['cookie']
+                'credentials': secrets_dict['credentials'],
+                'cookie': secrets_dict['cookie']
             }
         else:
             # Fallback to file (local development)
