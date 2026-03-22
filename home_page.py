@@ -27,6 +27,7 @@ SPLIT_MARCO_AMOUNT_KEY = "split_marco_amount"
 SPLIT_MONI_AMOUNT_KEY = "split_moni_amount"
 LAST_SPLIT_EDITED_KEY = "last_split_edited"
 EXPENSE_SUCCESS_MESSAGE_KEY = "expense_success_message"
+RESET_EXPENSE_FORM_KEY = "reset_expense_form"
 
 
 # ---------- UI HELPERS ----------
@@ -52,6 +53,7 @@ def _initialize_expense_state(username: str) -> None:
     st.session_state.setdefault(SPLIT_MONI_AMOUNT_KEY, 0.0)
     st.session_state.setdefault(LAST_SPLIT_EDITED_KEY, "")
     st.session_state.setdefault(EXPENSE_SUCCESS_MESSAGE_KEY, "")
+    st.session_state.setdefault(RESET_EXPENSE_FORM_KEY, False)
     _set_default_split_amounts(username, preserve_manual=False)
 
 
@@ -135,9 +137,17 @@ def _get_split_percentages(username: str) -> tuple[int, int]:
 
 
 def _reset_expense_form(username: str) -> None:
+    st.session_state[RESET_EXPENSE_FORM_KEY] = True
+
+
+def _apply_pending_reset(username: str) -> None:
+    if not st.session_state.get(RESET_EXPENSE_FORM_KEY):
+        return
+
     st.session_state[EXPENSE_AMOUNT_KEY] = None
     st.session_state[EXPENSE_DESCRIPTION_KEY] = ""
     st.session_state[SHARED_EXPENSE_KEY] = False
+    st.session_state[RESET_EXPENSE_FORM_KEY] = False
     _set_default_split_amounts(username, preserve_manual=False)
 
 
@@ -234,6 +244,7 @@ def render_add_expense_form() -> None:
     username = get_authenticated_username()
     expense_categories = CATEGORIES["Expense"]
     _initialize_expense_state(username)
+    _apply_pending_reset(username)
 
     if st.session_state.get(EXPENSE_SUCCESS_MESSAGE_KEY):
         st.success(st.session_state[EXPENSE_SUCCESS_MESSAGE_KEY])
