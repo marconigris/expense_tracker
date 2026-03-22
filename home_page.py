@@ -19,24 +19,35 @@ def render_add_expense_form() -> None:
     """Render the form to add a new expense."""
     st.subheader("Add Expense")
     
-    # Get username from Streamlit Cloud authenticated user
+    # Get username from multiple possible sources (must match bootstrap.py logic)
     username = None
-    if hasattr(st.session_state, "user") and st.session_state.user:
-        # Extract username from email (e.g., "marco" from "marco@example.com")
-        email = st.session_state.user.email
-        username = email.split("@")[0] if email else None
     
-    # Fallback to secrets if no authenticated user
+    # Try Streamlit Cloud auth (st.session_state.user attribute)
+    if hasattr(st.session_state, "user") and st.session_state.user:
+        try:
+            email = st.session_state.user.email
+            username = email.split("@")[0] if email else None
+            log.debug(f"Got username from st.session_state.user: {username}")
+        except Exception as e:
+            log.debug(f"Could not get user from st.session_state.user: {e}")
+    
+    # Fallback to direct st.secrets check
     if not username:
         try:
-            username = st.secrets.get("USERNAME", "")
-        except FileNotFoundError:
-            import os
-            username = os.getenv("USERNAME", "")
+            username = st.secrets.get("USERNAME")
+            if username:
+                log.debug(f"Got username from st.secrets: {username}")
+        except Exception as e:
+            log.debug(f"Could not get USERNAME from st.secrets: {e}")
     
-    # Display who's logged in
-    if username:
-        st.info(f"👤 Logged in as: **{username}**")
+    # Fallback to environment variable
+    if not username:
+        import os
+        username = os.getenv("USERNAME")
+        if username:
+            log.debug(f"Got username from environment: {username}")
+    
+    # Display who's logged in (this is now in the header, so removing here to avoid duplication)
     
     with st.form(key="add_expense_form", clear_on_submit=True):
         amount = st.number_input(

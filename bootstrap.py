@@ -46,24 +46,39 @@ def render_global_header() -> None:
     """
     st.title("Chetti Accounting ❤️")
     
-    # Get username from Streamlit Cloud authenticated user
+    # Get username from multiple possible sources
     username = None
-    if hasattr(st.session_state, "user") and st.session_state.user:
-        # Extract username from email (e.g., "marco" from "marco@example.com")
-        email = st.session_state.user.email
-        username = email.split("@")[0] if email else None
     
-    # Fallback to secrets if no authenticated user
+    # Try Streamlit Cloud auth (st.session_state.user attribute)
+    if hasattr(st.session_state, "user") and st.session_state.user:
+        try:
+            email = st.session_state.user.email
+            username = email.split("@")[0] if email else None
+            log.debug(f"Got username from st.session_state.user: {username}")
+        except Exception as e:
+            log.debug(f"Could not get user from st.session_state.user: {e}")
+    
+    # Fallback to direct st.secrets check
     if not username:
         try:
-            username = st.secrets.get("USERNAME", "")
-        except FileNotFoundError:
-            import os
-            username = os.getenv("USERNAME", "")
+            username = st.secrets.get("USERNAME")
+            if username:
+                log.debug(f"Got username from st.secrets: {username}")
+        except Exception as e:
+            log.debug(f"Could not get USERNAME from st.secrets: {e}")
+    
+    # Fallback to environment variable
+    if not username:
+        import os
+        username = os.getenv("USERNAME")
+        if username:
+            log.debug(f"Got username from environment: {username}")
     
     # Display greeting with username
     if username:
-        st.write(f"¡Hola, **{username}**!")
+        st.write(f"¡Hola, **{username}**! 👋")
+    else:
+        log.warning("Could not determine username from any source")
 
     sheet_url = get_main_sheet_url()
     if sheet_url:
