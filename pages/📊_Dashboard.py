@@ -18,6 +18,12 @@ st.set_page_config (layout='wide')
 def format_currency(amount: float) -> str:
     return f"${amount:,.2f}"
 
+
+USER_DISPLAY_NAMES = {
+    "marconigris": "Marco",
+    "monigila": "Moni",
+}
+
 # Load environment variables
 load_dotenv()
 
@@ -256,9 +262,10 @@ def show_overview_analytics(df, start_date, end_date):
         return
 
     total_expense = expense_df['Amount'].sum()
+    normalized_users = expense_df['User'].fillna('').str.strip().str.lower()
     user_balances = {
-        'Marco': expense_df[expense_df['User'].str.strip().str.lower() == 'marco']['Amount'].sum(),
-        'Moni': expense_df[expense_df['User'].str.strip().str.lower() == 'moni']['Amount'].sum(),
+        USER_DISPLAY_NAMES['marconigris']: expense_df[normalized_users == 'marconigris']['Amount'].sum(),
+        USER_DISPLAY_NAMES['monigila']: expense_df[normalized_users == 'monigila']['Amount'].sum(),
     }
     
     # Display key metrics
