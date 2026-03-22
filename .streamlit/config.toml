@@ -20,3 +20,4 @@ developmentMode = false
 [client]
 showErrorDetails = true
 toolbarMode = "auto"
+showSidebarNavigation = false

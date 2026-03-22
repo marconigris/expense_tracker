@@ -30,6 +30,34 @@ def render_sidebar_navigation() -> None:
             st.switch_page("Home.py")
 
 
+def render_sidebar_footer() -> None:
+    """Render sidebar actions near the bottom."""
+    st.sidebar.markdown(
+        """
+        <style>
+        [data-testid="stSidebarUserContent"] {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .sidebar-footer-spacer {
+            flex: 1 1 auto;
+            min-height: 2rem;
+        }
+        </style>
+        <div class="sidebar-footer-spacer"></div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    sheet_url = get_main_sheet_url()
+    if sheet_url:
+        st.sidebar.markdown(f"[📊 View Google Sheet]({sheet_url})")
+
+    render_logout()
+
+
 def ensure_startup() -> bool:
     """
     Lógica de arranque común para toda la app.
@@ -49,7 +77,7 @@ def ensure_startup() -> bool:
     # User is authenticated, continue with normal startup
     init_session_state()
     render_sidebar_navigation()
-    render_logout()  # Show logout in sidebar
+    render_sidebar_footer()
 
     return True
 
@@ -76,13 +104,8 @@ def render_global_header() -> None:
     project_name = get_current_project()
     
     if username:
-        st.write(f"¡Hola, **{username}**! You are adding expenses to **{project_name}** 👋")
+        st.title(f"Hola {username}, welcome to {project_name}")
     
-    sheet_url = get_main_sheet_url()
-    if sheet_url:
-        st.sidebar.markdown(f"[📊 View Google Sheet]({sheet_url})")
-
-
 def render_top_view_navigation(active_view: str) -> None:
     """Render the top-level page switcher between Expense and Balances."""
     selected_view = st.segmented_control(

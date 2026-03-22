@@ -9,7 +9,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build # type: ignore
 from dotenv import load_dotenv
 from utils.logging_utils import setup_logging
-from bootstrap import ensure_startup, render_top_view_navigation
+from bootstrap import ensure_startup, render_global_header, render_top_view_navigation
 from state import get_current_project
 from services.google_sheets import verify_sheets_setup
 
@@ -680,7 +680,7 @@ def show_analytics():
             return
 
         project_name = get_current_project()
-        st.title(f"{project_name} Dashboard")
+        render_global_header()
         render_top_view_navigation("Balances")
 
         # Get date filters once for all tabs
