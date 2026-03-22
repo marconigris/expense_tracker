@@ -49,16 +49,44 @@ def get_transactions_data():
         log.debug("Fetching transactions data from Google Sheets")
         result = service.spreadsheets().values().get(
             spreadsheetId=SHEET_ID,
-            range='Expenses!A1:F'
+            range='Expenses!A1:I'
         ).execute()
         
         values = result.get('values', [])
         if not values:
             log.warning("No transaction data found in sheet")
-            return pd.DataFrame(columns=['Date', 'Amount', 'Type', 'Category', 'Subcategory', 'Description'])
+            return pd.DataFrame(
+                columns=[
+                    'Date',
+                    'Amount',
+                    'Type',
+                    'Category',
+                    'Subcategory',
+                    'Description',
+                    'Currency Amount',
+                    'Currency',
+                    'User',
+                ]
+            )
         
+        columns = [
+            'Date',
+            'Amount',
+            'Type',
+            'Category',
+            'Subcategory',
+            'Description',
+            'Currency Amount',
+            'Currency',
+            'User',
+        ]
+        normalized_rows = [
+            row[: len(columns)] + [''] * max(0, len(columns) - len(row))
+            for row in values[1:]
+        ]
+
         log.info(f" Retrieved {len(values)-1} transaction records")
-        return pd.DataFrame(values[1:], columns=['Date', 'Amount', 'Type', 'Category', 'Subcategory', 'Description'])
+        return pd.DataFrame(normalized_rows, columns=columns)
     except Exception as e:
         log.error(f"❌ Failed to fetch transactions data: {str(e)}")
         raise
@@ -228,17 +256,19 @@ def show_overview_analytics(df, start_date, end_date):
         return
 
     total_expense = expense_df['Amount'].sum()
-    avg_expense = expense_df['Amount'].mean()
-    total_transactions = len(expense_df)
+    user_balances = {
+        'Marco': expense_df[expense_df['User'].str.strip().str.lower() == 'marco']['Amount'].sum(),
+        'Moni': expense_df[expense_df['User'].str.strip().str.lower() == 'moni']['Amount'].sum(),
+    }
     
     # Display key metrics
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Total Expenses", format_currency(total_expense), delta=None)
     with col2:
-        st.metric("Average Expense", format_currency(avg_expense), delta=None)
+        st.metric("Marco", format_currency(user_balances['Marco']), delta=None)
     with col3:
-        st.metric("Transactions", f"{total_transactions}", delta=None)
+        st.metric("Moni", format_currency(user_balances['Moni']), delta=None)
     
     # Monthly Summary
     st.subheader("Monthly Summary")
