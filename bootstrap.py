@@ -80,9 +80,10 @@ def render_global_header() -> None:
     """
     # Get username from authenticated session
     username = get_authenticated_username()
+    project_name = get_current_project()
     
     if username:
-        st.write(f"¡Hola, **{username}**! 👋")
+        st.write(f"¡Hola, **{username}**! You are adding expenses to **{project_name}** 👋")
     
     sheet_url = get_main_sheet_url()
     if sheet_url:
