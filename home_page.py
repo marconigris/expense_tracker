@@ -27,21 +27,40 @@ def _render_currency_selector() -> str:
     )
 
 
-def _parse_amount(raw_amount: str) -> float | None:
-    """Parse a user-entered amount, allowing either dot or comma decimals."""
-    cleaned = raw_amount.strip().replace(",", ".")
-    if not cleaned:
-        return None
+def _render_mobile_form_styles() -> None:
+    """Keep the add-expense form compact and touch-friendly on mobile."""
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stNumberInput"] button {
+            display: none;
+        }
 
-    try:
-        return float(cleaned)
-    except ValueError:
-        return None
+        div[data-testid="stNumberInput"] input::-webkit-outer-spin-button,
+        div[data-testid="stNumberInput"] input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        div[data-testid="stNumberInput"] input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
+        @media (max-width: 640px) {
+            div[data-testid="stSegmentedControl"] button {
+                min-height: 2.75rem;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_add_expense_form() -> None:
     """Render the form to add a new expense."""
     st.subheader("Add Expense")
+    _render_mobile_form_styles()
     
     # Get username from authenticated session
     username = get_authenticated_username()
@@ -51,9 +70,13 @@ def render_add_expense_form() -> None:
         col1, col2 = st.columns([0.7, 1.3], gap="medium")
         
         with col1:
-            amount_raw = st.text_input(
+            amount = st.number_input(
                 "Amount",
-                placeholder="Enter amount"
+                min_value=0.0,
+                value=None,
+                step=0.01,
+                format="%.2f",
+                placeholder="Enter amount",
             )
         
         with col2:
@@ -68,12 +91,10 @@ def render_add_expense_form() -> None:
         submitted = st.form_submit_button("✅ Add Expense", use_container_width=True)
         
         if submitted:
-            amount = _parse_amount(amount_raw)
-
             if amount and amount > 0 and description and username:
                 _save_expense(amount, description, currency, username)
             elif amount is None:
-                st.error("Please enter a valid amount")
+                st.error("Please enter an amount")
             elif amount == 0:
                 st.error("Please enter an amount greater than 0")
             elif not description:
