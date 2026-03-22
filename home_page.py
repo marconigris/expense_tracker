@@ -9,7 +9,7 @@ from bootstrap import ensure_startup, render_global_header
 from services.google_sheets import append_transactions
 from services.auth_service import get_authenticated_username
 from config.exchange_rates import convert_to_usd
-from config.constants import CATEGORIES, PROJECTS, DEFAULT_PROJECT
+from config.constants import CATEGORIES, PROJECTS
 from state import get_current_project
 
 log = setup_logging("expense_tracker_home")
@@ -352,7 +352,7 @@ def _save_expense(
     description: str,
     currency: str,
     category: str,
-    project: str,
+    project_name: str,
     user: str,
     marco_share: int,
     moni_share: int,
@@ -372,7 +372,6 @@ def _save_expense(
             description,                   # Description
             amount,                        # Currency Amount (original input)
             currency,                      # Currency
-            project,                       # Project
             user,                          # User
             marco_share,                   # Marco Split %
             moni_share,                    # Moni Split %
@@ -383,7 +382,7 @@ def _save_expense(
             f"(${usd_amount:.2f} USD), Description: {description}, User: {user}"
         )
         
-        append_transactions("Expenses", values)
+        append_transactions(project_name, values)
         
         split_note = f" Split: Marco {marco_share}% / Moni {moni_share}%." if (marco_share, moni_share) not in {(100, 0), (0, 100)} else ""
         msg = f"✅ Saved {category}: {currency} {amount:.2f} ({format_usd(usd_amount)}).{split_note}"

@@ -6,7 +6,7 @@ from typing import Any, List
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import streamlit as st
-from config.constants import DEFAULT_PROJECT
+from config.constants import DEFAULT_PROJECT, PROJECTS
 
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,6 @@ EXPENSE_HEADERS = [
     'Description',
     'Currency Amount',
     'Currency',
-    'Project',
     'User',
     'Marco Split %',
     'Moni Split %',
@@ -77,7 +76,6 @@ def _migrate_expense_rows(existing_rows: list[list[str]]) -> list[list[Any]]:
             padded_row[5],
             padded_row[6],
             padded_row[7],
-            DEFAULT_PROJECT,
             user,
             marco_split,
             moni_split,
@@ -97,12 +95,96 @@ def _migrate_split_rows(existing_rows: list[list[str]]) -> list[list[Any]]:
             padded_row[4],
             padded_row[5],
             padded_row[6],
-            DEFAULT_PROJECT,
             padded_row[7],
             padded_row[8],
             padded_row[9],
         ])
     return migrated_rows
+
+
+def _migrate_project_rows(existing_rows: list[list[str]]) -> dict[str, list[list[Any]]]:
+    migrated_rows = {project_name: [] for project_name in PROJECTS}
+    for row in existing_rows:
+        padded_row = row + [''] * max(0, 11 - len(row))
+        project_name = padded_row[7] or DEFAULT_PROJECT
+        if project_name not in migrated_rows:
+            project_name = DEFAULT_PROJECT
+        migrated_rows[project_name].append([
+            padded_row[0],
+            padded_row[1],
+            padded_row[2],
+            padded_row[3],
+            padded_row[4],
+            padded_row[5],
+            padded_row[6],
+            padded_row[8],
+            padded_row[9],
+            padded_row[10],
+        ])
+    return migrated_rows
+
+
+def _ensure_sheet(service: Any, spreadsheet_id: str, sheet_name: str, existing_sheets: set[str]) -> None:
+    if sheet_name in existing_sheets:
+        return
+
+    logger.info(f"Creating {sheet_name} sheet...")
+    body = {
+        'requests': [{
+            'addSheet': {
+                'properties': {
+                    'title': sheet_name
+                }
+            }
+        }]
+    }
+    _execute_request(
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body=body
+        )
+    )
+
+
+def _read_sheet_values(service: Any, spreadsheet_id: str, sheet_name: str, end_column: str = 'J') -> list[list[str]]:
+    result = _execute_request(
+        service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id,
+            range=f'{sheet_name}!A1:{end_column}'
+        )
+    )
+    return result.get('values', [])
+
+
+def _write_sheet_header(service: Any, spreadsheet_id: str, sheet_name: str) -> None:
+    _execute_request(
+        service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range=f'{sheet_name}!A1:J1',
+            valueInputOption='RAW',
+            body={'values': [EXPENSE_HEADERS]},
+        )
+    )
+
+
+def _write_project_rows(service: Any, spreadsheet_id: str, sheet_name: str, rows: list[list[Any]]) -> None:
+    _execute_request(
+        service.spreadsheets().values().clear(
+            spreadsheetId=spreadsheet_id,
+            range=f'{sheet_name}!A:J',
+            body={},
+        )
+    )
+    _write_sheet_header(service, spreadsheet_id, sheet_name)
+    if rows:
+        _execute_request(
+            service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=f'{sheet_name}!A2:J{len(rows) + 1}',
+                valueInputOption='USER_ENTERED',
+                body={'values': rows},
+            )
+        )
 
 
 def _execute_request(request: Any, num_retries: int = 3) -> Any:
@@ -237,101 +319,55 @@ def verify_sheets_setup() -> None:
         sheets = sheet_metadata.get('sheets', [])
         existing_sheets = {s.get("properties", {}).get("title") for s in sheets}
         
-        # Check if Expenses sheet exists
-        if 'Expenses' not in existing_sheets:
-            logger.info("Creating Expenses sheet...")
-            body = {
-                'requests': [{
-                    'addSheet': {
-                        'properties': {
-                            'title': 'Expenses'
-                        }
-                    }
-                }]
-            }
-            _execute_request(
-                service.spreadsheets().batchUpdate(
-                    spreadsheetId=spreadsheet_id,
-                    body=body
-                )
-            )
-        
-        # Set headers for full format (for dashboard compatibility)
-        headers = [EXPENSE_HEADERS]
-        result = _execute_request(
-            service.spreadsheets().values().get(
-                spreadsheetId=spreadsheet_id,
-                range='Expenses!A1:K'
-            )
+        for project_name in PROJECTS:
+            _ensure_sheet(service, spreadsheet_id, project_name, existing_sheets)
+
+        # Refresh metadata after potential sheet creation
+        refreshed_metadata = _execute_request(
+            service.spreadsheets().get(spreadsheetId=spreadsheet_id)
         )
-        
-        current_values = result.get('values', [])
-        current_headers = current_values[0] if current_values else []
-        
-        if current_headers == OLD_EXPENSE_HEADERS:
-            logger.info("Migrating Expenses sheet to split-aware schema...")
-            migrated_rows = _migrate_expense_rows(current_values[1:])
-            _execute_request(
-                service.spreadsheets().values().clear(
-                    spreadsheetId=spreadsheet_id,
-                    range='Expenses!A:K',
-                    body={},
-                )
-            )
-            _execute_request(
-                service.spreadsheets().values().update(
-                    spreadsheetId=spreadsheet_id,
-                    range='Expenses!A1:K1',
-                    valueInputOption='RAW',
-                    body={'values': headers},
-                )
-            )
-            if migrated_rows:
-                _execute_request(
-                    service.spreadsheets().values().update(
-                        spreadsheetId=spreadsheet_id,
-                        range=f'Expenses!A2:K{len(migrated_rows) + 1}',
-                        valueInputOption='USER_ENTERED',
-                        body={'values': migrated_rows},
-                    )
-                )
-        elif current_headers == SPLIT_EXPENSE_HEADERS:
-            logger.info("Adding Project column to Expenses sheet...")
-            migrated_rows = _migrate_split_rows(current_values[1:])
-            _execute_request(
-                service.spreadsheets().values().clear(
-                    spreadsheetId=spreadsheet_id,
-                    range='Expenses!A:K',
-                    body={},
-                )
-            )
-            _execute_request(
-                service.spreadsheets().values().update(
-                    spreadsheetId=spreadsheet_id,
-                    range='Expenses!A1:K1',
-                    valueInputOption='RAW',
-                    body={'values': headers},
-                )
-            )
-            if migrated_rows:
-                _execute_request(
-                    service.spreadsheets().values().update(
-                        spreadsheetId=spreadsheet_id,
-                        range=f'Expenses!A2:K{len(migrated_rows) + 1}',
-                        valueInputOption='USER_ENTERED',
-                        body={'values': migrated_rows},
-                    )
-                )
-        elif not current_headers or current_headers != headers[0]:
-            logger.info("Setting up Expenses sheet headers...")
-            _execute_request(
-                service.spreadsheets().values().update(
-                    spreadsheetId=spreadsheet_id,
-                    range='Expenses!A1:K1',
-                    valueInputOption='RAW',
-                    body={'values': headers}
-                )
-            )
+        sheets = refreshed_metadata.get('sheets', [])
+        existing_sheets = {s.get("properties", {}).get("title") for s in sheets}
+
+        for project_name in PROJECTS:
+            project_values = _read_sheet_values(service, spreadsheet_id, project_name)
+            project_headers = project_values[0] if project_values else []
+            if not project_headers or project_headers != EXPENSE_HEADERS:
+                logger.info(f"Setting up {project_name} sheet headers...")
+                _write_sheet_header(service, spreadsheet_id, project_name)
+
+        if 'Expenses' in existing_sheets:
+            legacy_values = _read_sheet_values(service, spreadsheet_id, 'Expenses', end_column='K')
+            legacy_headers = legacy_values[0] if legacy_values else []
+            migrated_by_project: dict[str, list[list[Any]]] | None = None
+
+            if legacy_headers == OLD_EXPENSE_HEADERS:
+                migrated_by_project = {project_name: [] for project_name in PROJECTS}
+                migrated_by_project[DEFAULT_PROJECT] = _migrate_expense_rows(legacy_values[1:])
+            elif legacy_headers == SPLIT_EXPENSE_HEADERS:
+                migrated_by_project = {project_name: [] for project_name in PROJECTS}
+                migrated_by_project[DEFAULT_PROJECT] = _migrate_split_rows(legacy_values[1:])
+            elif legacy_headers == [
+                'Date',
+                'Amount',
+                'Type',
+                'Category',
+                'Description',
+                'Currency Amount',
+                'Currency',
+                'Project',
+                'User',
+                'Marco Split %',
+                'Moni Split %',
+            ]:
+                migrated_by_project = _migrate_project_rows(legacy_values[1:])
+
+            if migrated_by_project is not None:
+                for project_name, rows in migrated_by_project.items():
+                    project_values = _read_sheet_values(service, spreadsheet_id, project_name)
+                    if len(project_values) <= 1 and rows:
+                        logger.info(f"Migrating legacy Expenses rows into {project_name} sheet...")
+                        _write_project_rows(service, spreadsheet_id, project_name, rows)
         
         # Initialize ExchangeRates sheet
         initialize_exchange_rates_sheet(service, spreadsheet_id)
@@ -376,7 +412,7 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
     
     # Ensure range_name specifies just the columns, not rows (let Google Sheets find next empty row)
     if "!" not in range_name:
-        range_name = f"{range_name}!A:K"  # Columns A-K for project-aware expense schema
+        range_name = f"{range_name}!A:J"  # Columns A-J for per-project expense schema
 
     try:
         logger.info(f"Appending transactions to range: {range_name}")
