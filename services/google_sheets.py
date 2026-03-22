@@ -142,9 +142,9 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
 
     body = {"values": values}
     
-    # Ensure range_name is properly formatted as "SheetName!A2:D" for appending after headers
+    # Ensure range_name specifies just the columns, not rows (let Google Sheets find next empty row)
     if "!" not in range_name:
-        range_name = f"{range_name}!A2:Z"
+        range_name = f"{range_name}!A:D"  # Only columns A-D for our 4 fields
 
     try:
         logger.info(f"Appending transactions to range: {range_name}")
