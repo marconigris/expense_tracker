@@ -24,24 +24,29 @@ def render_add_expense_form() -> None:
     username = get_authenticated_username()
     
     with st.form(key="add_expense_form", clear_on_submit=True):
-        # Amount input - empty by default, no min value to allow starting fresh
-        amount = st.number_input(
-            "Amount",
-            value=None,
-            step=0.01,
-            format="%.2f",
-            placeholder="Enter amount"
-        )
+        # Row 0: Amount (0,0) and Currency (0,1)
+        col1, col2 = st.columns(2, gap="small")
         
+        with col1:
+            amount = st.number_input(
+                "Amount",
+                value=None,
+                step=0.01,
+                format="%.2f",
+                placeholder="Enter amount"
+            )
+        
+        with col2:
+            currency = st.radio(
+                "Currency",
+                ["USD", "EUR", "DOP"],
+                horizontal=False
+            )
+        
+        # Row 1: Description (1,0) and (1,1) - spans both columns
         description = st.text_input(
             "Description",
             placeholder="e.g., Groceries, Gas, Coffee"
-        )
-        
-        currency = st.radio(
-            "Currency",
-            ["USD", "EUR", "DOP"],
-            horizontal=True
         )
         
         submitted = st.form_submit_button("✅ Add Expense", use_container_width=True)
