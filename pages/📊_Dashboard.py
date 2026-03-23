@@ -339,7 +339,7 @@ def get_google_sheets_service():
             json.loads(creds_json),
             scopes=['https://www.googleapis.com/auth/spreadsheets']
         )
-        service = build('sheets', 'v4', credentials=creds)
+        service = build('sheets', 'v4', credentials=creds, cache_discovery=False)
         return service
     except Exception as e:
         log.error(f"❌ Failed to connect to Google Sheets: {str(e)}")

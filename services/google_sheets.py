@@ -297,7 +297,7 @@ def get_sheets_service():
             creds_dict,
             scopes=["https://www.googleapis.com/auth/spreadsheets"],
         )
-        service: Any = build("sheets", "v4", credentials=creds)
+        service: Any = build("sheets", "v4", credentials=creds, cache_discovery=False)
         return service
     except Exception as e:
         logger.exception("Error creating Google Sheets service")
