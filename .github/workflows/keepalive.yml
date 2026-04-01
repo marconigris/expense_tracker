@@ -11,4 +11,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Ping Streamlit app
-        run: curl -L --fail --silent --show-error https://chettiexpenses.streamlit.app/ > /dev/null
+        run: |
+          status=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" https://chettiexpenses.streamlit.app/)
+          echo "HTTP $status"
+          case "$status" in
+            200|301|302|307|308) exit 0 ;;
+            *) exit 1 ;;
+          esac
