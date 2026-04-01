@@ -15,6 +15,6 @@ jobs:
           status=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" https://chettiexpenses.streamlit.app/)
           echo "HTTP $status"
           case "$status" in
-            200|301|302|307|308) exit 0 ;;
+            200|301|302|303|307|308) exit 0 ;;
             *) exit 1 ;;
           esac
