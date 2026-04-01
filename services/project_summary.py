@@ -10,7 +10,7 @@ from config.exchange_rates import convert_currency
 from services.google_sheets import (
     IMPORTS_SHEET_NAME,
     SPREADSHEET_ID_ENV_VAR,
-    get_sheets_service,
+    get_transaction_rows,
     verify_sheets_setup,
 )
 
@@ -133,6 +133,7 @@ def _parse_sheet_dates(series: pd.Series) -> pd.Series:
     return serial_dates.fillna(text_dates)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def get_personal_account_summary(project_name: str) -> dict[str, float | str]:
     values = _get_project_sheet_values(project_name)
     if not values:
@@ -156,27 +157,17 @@ def get_personal_account_summary(project_name: str) -> dict[str, float | str]:
     }
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def _get_project_sheet_values(project_name: str) -> list[list[str]]:
-    service = get_sheets_service()
-    spreadsheet_id = _get_spreadsheet_id()
-
     try:
-        result = service.spreadsheets().values().get(
-            spreadsheetId=spreadsheet_id,
-            range=f'{project_name}!A1:Q'
-        ).execute()
+        return get_transaction_rows(project_name)
     except Exception as error:
         if "Unable to parse range" in str(error) and verify_sheets_setup():
-            result = service.spreadsheets().values().get(
-                spreadsheetId=spreadsheet_id,
-                range=f'{project_name}!A1:Q'
-            ).execute()
-        else:
-            raise
-
-    return result.get('values', [])
+            return get_transaction_rows(project_name)
+        raise
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def get_shared_account_summary(project_name: str) -> dict[str, float | str]:
     values = _get_project_sheet_values(project_name)
     if not values:
@@ -233,6 +224,7 @@ def get_shared_account_summary(project_name: str) -> dict[str, float | str]:
     }
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def get_project_dashboard_dataframe(project_name: str, report_currency: str = "USD") -> pd.DataFrame:
     values = _get_project_sheet_values(project_name)
     if not values:
@@ -264,6 +256,7 @@ def get_project_dashboard_dataframe(project_name: str, report_currency: str = "U
     return project_df.sort_values('Date', ascending=False).reset_index(drop=True)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def get_project_full_dashboard_dataframe(project_name: str, report_currency: str = "USD") -> pd.DataFrame:
     values = _get_project_sheet_values(project_name)
     if not values:
@@ -292,6 +285,7 @@ def get_project_full_dashboard_dataframe(project_name: str, report_currency: str
     return project_df.sort_values('Date', ascending=False).reset_index(drop=True)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def get_private_dashboard_dataframe(report_currency: str = "USD") -> pd.DataFrame:
     frames: list[pd.DataFrame] = []
 

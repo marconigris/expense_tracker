@@ -212,6 +212,16 @@ def _read_sheet_values(service: Any, spreadsheet_id: str, sheet_name: str, end_c
     return result.get('values', [])
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def _read_sheet_values_cached(spreadsheet_id: str, sheet_name: str, end_column: str = TRANSACTION_END_COLUMN) -> list[list[str]]:
+    service = get_sheets_service()
+    return _read_sheet_values(service, spreadsheet_id, sheet_name, end_column)
+
+
+def _clear_data_caches() -> None:
+    st.cache_data.clear()
+
+
 def _write_sheet_header(service: Any, spreadsheet_id: str, sheet_name: str) -> None:
     _execute_request(
         service.spreadsheets().values().update(
@@ -513,6 +523,7 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
                 body=body,
             )
         )
+        _clear_data_caches()
         logger.info(f"Successfully appended transactions: {result.get('updates', {})}")
     except Exception as e:
         if _is_missing_range_error(e):
@@ -527,6 +538,7 @@ def append_transactions(range_name: str, values: List[List[Any]]) -> None:
                         body=body,
                     )
                 )
+                _clear_data_caches()
                 logger.info(f"Successfully appended transactions after sheet setup retry: {result.get('updates', {})}")
                 return
         logger.exception("Error appending transactions to Google Sheets")
@@ -541,10 +553,10 @@ def get_import_profiles() -> list[dict[str, str]]:
         raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")
 
     try:
-        values = _read_sheet_values(service, spreadsheet_id, IMPORT_PROFILES_SHEET_NAME, end_column='H')
+        values = _read_sheet_values_cached(spreadsheet_id, IMPORT_PROFILES_SHEET_NAME, end_column='H')
     except Exception as error:
         if _is_missing_range_error(error) and verify_sheets_setup():
-            values = _read_sheet_values(service, spreadsheet_id, IMPORT_PROFILES_SHEET_NAME, end_column='H')
+            values = _read_sheet_values_cached(spreadsheet_id, IMPORT_PROFILES_SHEET_NAME, end_column='H')
         else:
             raise
 
@@ -598,20 +610,20 @@ def save_import_profile(
         for profile in filtered_profiles
     ]
     _write_custom_sheet(service, spreadsheet_id, IMPORT_PROFILES_SHEET_NAME, IMPORT_PROFILE_HEADERS, rows, 'H')
+    _clear_data_caches()
 
 
 def get_transaction_rows(sheet_name: str) -> list[list[str]]:
-    service = get_sheets_service()
     spreadsheet_id = _get_config_value(SPREADSHEET_ID_ENV_VAR)
 
     if not spreadsheet_id:
         raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")
 
     try:
-        return _read_sheet_values(service, spreadsheet_id, sheet_name, end_column=TRANSACTION_END_COLUMN)
+        return _read_sheet_values_cached(spreadsheet_id, sheet_name, end_column=TRANSACTION_END_COLUMN)
     except Exception as error:
         if _is_missing_range_error(error) and verify_sheets_setup():
-            return _read_sheet_values(service, spreadsheet_id, sheet_name, end_column=TRANSACTION_END_COLUMN)
+            return _read_sheet_values_cached(spreadsheet_id, sheet_name, end_column=TRANSACTION_END_COLUMN)
         raise
 
 
@@ -623,3 +635,4 @@ def overwrite_transaction_rows(sheet_name: str, rows: list[list[Any]]) -> None:
         raise ValueError(f"{SPREADSHEET_ID_ENV_VAR} not found in secrets or environment variables")
 
     _write_project_rows(service, spreadsheet_id, sheet_name, rows)
+    _clear_data_caches()
