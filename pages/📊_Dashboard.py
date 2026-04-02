@@ -2,16 +2,10 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
-import sys
-import json
-import os
-from google.oauth2 import service_account
-from googleapiclient.discovery import build # type: ignore
-from dotenv import load_dotenv
 from utils.logging_utils import setup_logging
 from bootstrap import ensure_startup, render_global_header, render_top_view_navigation, render_project_balance_banner
 from state import get_current_project
-from services.google_sheets import verify_sheets_setup
+from services.google_sheets import verify_sheets_setup, get_transaction_rows
 from config.constants import PROJECTS, is_private_flow_project
 from config.exchange_rates import convert_currency
 
@@ -320,53 +314,10 @@ def render_personal_overview_cards(income_total: float, expense_total: float, ne
         unsafe_allow_html=True,
     )
 
-
-# Load environment variables
-load_dotenv()
-
-@st.cache_resource
-def get_google_sheets_service():
-    """Cache Google Sheets credentials and service"""
-    try:
-        creds_json = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
-        if not creds_json:
-            try:
-                creds_json = st.secrets.get("GOOGLE_SHEETS_CREDENTIALS")
-            except FileNotFoundError:
-                creds_json = None
-
-        creds = service_account.Credentials.from_service_account_info(
-            json.loads(creds_json),
-            scopes=['https://www.googleapis.com/auth/spreadsheets']
-        )
-        service = build('sheets', 'v4', credentials=creds, cache_discovery=False)
-        return service
-    except Exception as e:
-        log.error(f"❌ Failed to connect to Google Sheets: {str(e)}")
-        raise
-
-# Initialize service and sheet ID
-try:
-    service = get_google_sheets_service()
-    SHEET_ID = os.getenv('GOOGLE_SHEET_ID')
-    if not SHEET_ID:
-        try:
-            SHEET_ID = st.secrets.get('GOOGLE_SHEET_ID')
-        except FileNotFoundError:
-            SHEET_ID = None
-except Exception:
-    st.error("Failed to connect to Google Sheets. Please check your credentials.")
-    sys.exit(1)
-
 def get_transactions_data(project_name: str):
     try:
         log.debug("Fetching transactions data from Google Sheets")
-        result = service.spreadsheets().values().get(
-            spreadsheetId=SHEET_ID,
-            range=f'{project_name}!A1:Q'
-        ).execute()
-        
-        values = result.get('values', [])
+        values = get_transaction_rows(project_name)
         if not values:
             log.warning("No transaction data found in sheet")
             return pd.DataFrame(columns=TRANSACTION_COLUMNS)
@@ -379,11 +330,7 @@ def get_transactions_data(project_name: str):
         if "Unable to parse range" in str(e):
             log.warning(f"Missing range for project {project_name}. Re-verifying sheet setup and retrying once.")
             if verify_sheets_setup():
-                result = service.spreadsheets().values().get(
-                    spreadsheetId=SHEET_ID,
-                    range=f'{project_name}!A1:Q'
-                ).execute()
-                values = result.get('values', [])
+                values = get_transaction_rows(project_name)
                 if not values:
                     return pd.DataFrame(columns=TRANSACTION_COLUMNS)
                 df = normalize_transactions_dataframe(values)
@@ -416,12 +363,7 @@ def get_pending_transactions() -> pd.DataFrame:
     """
     try:
         log.debug("Fetching pending transactions data")
-        result = service.spreadsheets().values().get(
-            spreadsheetId=SHEET_ID,
-            range='Pending!A1:G'  # Include status column
-        ).execute()
-        
-        values = result.get('values', [])
+        values = get_transaction_rows("Pending")
         if not values:
             log.warning("No data found in Pending sheet")
             return pd.DataFrame(columns=['Date', 'Amount', 'Type', 'Category', 'Description', 'Due Date', 'Status'])

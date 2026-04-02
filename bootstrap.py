@@ -8,7 +8,6 @@ import streamlit.components.v1 as components
 
 from services.google_sheets import get_sheet_url
 from services.auth_service import render_login, render_logout, get_authenticated_username, is_authenticated
-from services.project_summary import get_personal_account_summary, get_shared_account_summary
 from ui_styles import inject_global_styles
 from utils.logging_utils import setup_logging
 from state import (
@@ -272,6 +271,8 @@ def _format_currency(amount: float, currency: str) -> str:
 
 
 def render_project_balance_banner(project_name: str) -> None:
+    from services.project_summary import get_personal_account_summary, get_shared_account_summary
+
     project_currency = get_project_config(project_name)["default_currency"]
     try:
         if is_private_flow_project(project_name):

@@ -4,10 +4,9 @@ import streamlit as st
 
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 
-from home_page import render
-
 
 def main() -> None:
+    from home_page import render
     render()
 
 

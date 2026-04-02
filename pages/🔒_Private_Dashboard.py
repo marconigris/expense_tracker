@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
 
 from bootstrap import ensure_startup
@@ -476,6 +475,8 @@ def render() -> None:
         monthly_summary = monthly_summary.sort_values("Month")
 
     st.markdown("### Annual Flow")
+    import plotly.express as px
+
     monthly_chart = px.bar(
         monthly_summary,
         x="Month",
