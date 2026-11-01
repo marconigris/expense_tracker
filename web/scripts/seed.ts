@@ -16,7 +16,10 @@ async function main() {
 
   await db
     .insert(t.users)
-    .values({ email: "nigris.marco@gmail.com", name: "Marco", role: "owner" })
+    .values([
+      { email: "nigris.marco@gmail.com", name: "Marco", role: "owner" },
+      { email: "monica.gilardoni00@gmail.com", name: "Moni", role: "partner" },
+    ])
     .onConflictDoNothing();
 
   // First run only: capital Marco reported on 2026-11-01, starter rules, dad's opening balances.
