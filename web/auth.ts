@@ -1,22 +1,33 @@
 import { eq } from "drizzle-orm";
 import NextAuth from "next-auth";
-import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
 import { db, t } from "@/lib/db";
+import { verifyPassword } from "@/lib/password";
 
-// Local dev without Google credentials skips sign-in entirely; a deployed build always requires it.
-export const authDisabled = process.env.NODE_ENV !== "production" && !process.env.AUTH_GOOGLE_ID;
+// Local dev skips sign-in unless AUTH_IN_DEV=1; a deployed build always requires it.
+export const authDisabled = process.env.NODE_ENV !== "production" && process.env.AUTH_IN_DEV !== "1";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [Google],
+  providers: [
+    Credentials({
+      credentials: { email: {}, password: {} },
+      async authorize(credentials) {
+        const email = String(credentials?.email ?? "").trim().toLowerCase();
+        const password = String(credentials?.password ?? "");
+        if (!email || !password) return null;
+        const [user] = await db.select().from(t.users).where(eq(t.users.email, email));
+        if (!user || !(await verifyPassword(password, user.passwordHash))) {
+          // Slow down guessing.
+          await new Promise((r) => setTimeout(r, 1000));
+          return null;
+        }
+        return { id: user.id, email: user.email, name: user.name };
+      },
+    }),
+  ],
   pages: { signIn: "/login", error: "/login" },
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 180 },
   callbacks: {
-    // Only people listed in the users table (Marco, Moni) can get in.
-    async signIn({ user }) {
-      if (!user.email) return false;
-      const [row] = await db.select({ id: t.users.id }).from(t.users).where(eq(t.users.email, user.email.toLowerCase()));
-      return Boolean(row);
-    },
     authorized({ auth }) {
       return authDisabled || Boolean(auth?.user);
     },

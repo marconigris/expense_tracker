@@ -42,6 +42,8 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   role: text("role", { enum: ["owner", "partner"] }).notNull(),
+  // scrypt hash set with `npm run set-password`; null = cannot sign in yet.
+  passwordHash: text("password_hash"),
 });
 
 export const entities = pgTable("entities", {

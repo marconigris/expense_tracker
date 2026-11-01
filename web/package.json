@@ -12,7 +12,8 @@
     "db:seed": "tsx --env-file=.env scripts/seed.ts",
     "codex:classify": "tsx --env-file=.env --env-file-if-exists=.env.prod scripts/codex-classify.ts",
     "codex:pdf": "tsx --env-file=.env --env-file-if-exists=.env.prod scripts/codex-pdf.ts",
-    "vercel-build": "drizzle-kit migrate && tsx scripts/seed.ts && next build"
+    "vercel-build": "drizzle-kit migrate && tsx scripts/seed.ts && next build",
+    "set-password": "tsx --env-file=.env --env-file-if-exists=.env.prod scripts/set-password.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.4",

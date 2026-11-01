@@ -36,10 +36,16 @@ npm run dev
 
 ## Access
 
-Google sign-in (Auth.js). Only emails in the `users` table get in; Moni sees nothing yet (owner-only pages).
-Locally, leaving `AUTH_GOOGLE_ID` empty skips sign-in.
+Email + password (Auth.js Credentials, scrypt hashes). Only emails in the `users` table get in; Moni sees nothing yet (owner-only pages).
+Set a password from the terminal (never through the app or chat):
+
+```bash
+npm run set-password -- nigris.marco@gmail.com     # .env.prod present → production DB
+```
+
+Locally sign-in is skipped unless `AUTH_IN_DEV=1`.
 
 ## Deploy (Vercel)
 
 Root directory `web`. `vercel-build` runs migrations and the idempotent seed before `next build`.
-Env vars: `DATABASE_URL` (Neon integration), `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`.
+Env vars: `DATABASE_URL` (Neon integration, prefix `DATABASE`), `AUTH_SECRET`.
