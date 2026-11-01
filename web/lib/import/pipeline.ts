@@ -1,0 +1,103 @@
+import { createHash } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { classifyPending } from "../classify";
+import { db, t } from "../db";
+import type { Account } from "../db/schema";
+import { convert, ensureRates } from "../fx";
+import { parseCsv, type ParsedRow } from "./csv";
+
+export type ImportResult = {
+  batchId: string | null;
+  format: string;
+  imported: number;
+  duplicates: number;
+  errors: string[];
+  classified?: Awaited<ReturnType<typeof classifyPending>>;
+};
+
+const normalizeDescription = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+
+/**
+ * Multi-currency exports (Revolut, Wise) list every pocket in one file, so each row goes
+ * to the sibling account of the same institution that holds its currency.
+ */
+function routeRow(row: ParsedRow, selected: Account, siblings: Account[]): Account | null {
+  const currency = row.currency ?? selected.currency;
+  const wantsSavings = row.product ? /savings|deposit|ahorro/i.test(row.product) : selected.kind === "savings";
+  if (selected.currency === currency && (selected.kind === "savings") === wantsSavings) return selected;
+  const candidates = siblings.filter((a) => a.currency === currency && a.active);
+  return candidates.find((a) => (a.kind === "savings") === wantsSavings) ?? candidates[0] ?? null;
+}
+
+export async function importStatement(input: { accountId: string; filename: string; data: Buffer }): Promise<ImportResult> {
+  if (input.filename.toLowerCase().endsWith(".pdf")) {
+    return { batchId: null, format: "pdf", imported: 0, duplicates: 0, errors: ["Los PDF se importan desde la Mac con: npm run codex:pdf"] };
+  }
+  const { rows, format, errors } = parseCsv(input.data.toString("utf8"));
+  return importRows({ accountId: input.accountId, filename: input.filename, format, rows, errors });
+}
+
+/** Stores already-parsed rows: routing, dedupe, FX and first-pass classification. */
+export async function importRows(input: {
+  accountId: string;
+  filename: string;
+  format: string;
+  rows: ParsedRow[];
+  errors?: string[];
+}): Promise<ImportResult> {
+  const { rows, format } = input;
+  const errors = [...(input.errors ?? [])];
+  const [selected] = await db.select().from(t.accounts).where(eq(t.accounts.id, input.accountId));
+  if (!selected) throw new Error("Cuenta inexistente");
+  if (rows.length === 0) return { batchId: null, format, imported: 0, duplicates: 0, errors };
+
+  const siblings = await db.select().from(t.accounts).where(eq(t.accounts.institution, selected.institution));
+  const dates = rows.map((r) => r.date).sort();
+  await ensureRates(
+    rows.map((r) => r.currency ?? selected.currency).concat("EUR"),
+    dates[0],
+    dates[dates.length - 1],
+  );
+
+  const [batch] = await db
+    .insert(t.importBatches)
+    .values({ accountId: selected.id, filename: input.filename, format })
+    .returning();
+
+  const insertedIds: string[] = [];
+  let duplicates = 0;
+  for (const row of rows) {
+    const account = routeRow(row, selected, siblings);
+    if (!account) {
+      errors.push(`${row.date} ${row.description}: no hay cuenta ${selected.institution} en ${row.currency}`);
+      continue;
+    }
+    const dedupeKey = createHash("sha1")
+      .update([account.id, row.date, row.amount.toFixed(2), normalizeDescription(row.description)].join("|"))
+      .digest("hex");
+    const [inserted] = await db
+      .insert(t.transactions)
+      .values({
+        accountId: account.id,
+        date: row.date,
+        description: row.description,
+        amount: row.amount.toFixed(2),
+        currency: account.currency,
+        ...(await convert(row.amount, account.currency, row.date)),
+        importBatchId: batch.id,
+        dedupeKey,
+      })
+      .onConflictDoNothing({ target: t.transactions.dedupeKey })
+      .returning({ id: t.transactions.id });
+    if (inserted) insertedIds.push(inserted.id);
+    else duplicates++;
+  }
+
+  await db
+    .update(t.importBatches)
+    .set({ rowCount: insertedIds.length, skippedDuplicates: duplicates })
+    .where(eq(t.importBatches.id, batch.id));
+
+  const classified = insertedIds.length ? await classifyPending(insertedIds) : undefined;
+  return { batchId: batch.id, format, imported: insertedIds.length, duplicates, errors, classified };
+}

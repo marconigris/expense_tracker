@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f6f7fb;
+  --card: #ffffff;
+  --fg: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --active: #eef2ff;
+  --accent: #1e3a8a;
+  --pos: #059669;
+  --neg: #dc2626;
+  --warn: #d97706;
+  --hero-from: #0b1f4d;
+  --hero-to: #1e3a8a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1020;
+    --card: #111831;
+    --fg: #e2e8f0;
+    --muted: #94a3b8;
+    --line: #1f2a48;
+    --active: #172554;
+    --accent: #3b5bdb;
+    --pos: #34d399;
+    --neg: #f87171;
+    --warn: #fbbf24;
+    --hero-from: #0a1636;
+    --hero-to: #1d3a8a;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-active: var(--active);
+  --color-accent: var(--accent);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-warn: var(--warn);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.hero {
+  background: linear-gradient(135deg, var(--hero-from), var(--hero-to));
+  color: #fff;
+}

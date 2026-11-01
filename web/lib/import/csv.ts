@@ -1,0 +1,101 @@
+import Papa from "papaparse";
+
+export type ParsedRow = {
+  date: string; // YYYY-MM-DD
+  description: string;
+  amount: number; // signed, negative = money out
+  currency?: string; // when the file mixes currencies (Revolut, Wise)
+  product?: string; // Revolut "Current" / "Savings" / "Deposit"
+};
+
+const norm = (s: string) =>
+  s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+
+const COLUMNS = {
+  date: ["completed date", "fecha", "date", "fecha operacion", "started date", "fecha de operacion"],
+  description: ["description", "descripcion", "concepto", "detalle", "merchant", "payee"],
+  amount: ["amount", "importe", "monto", "valor"],
+  debit: ["debit", "debito", "egreso", "paid out", "cargo"],
+  credit: ["credit", "credito", "ingreso", "paid in", "abono"],
+  fee: ["fee", "comision"],
+  currency: ["currency", "moneda"],
+  product: ["product"],
+  state: ["state", "estado"],
+};
+
+function findColumn(headers: string[], names: string[]) {
+  for (const name of names) {
+    const i = headers.findIndex((h) => norm(h) === name);
+    if (i >= 0) return i;
+  }
+  return -1;
+}
+
+/** Parses "1.234,56", "1,234.56", "-12.5", "(30.00)" and "$ 1.000". */
+export function parseAmount(raw: string | undefined): number | null {
+  if (!raw) return null;
+  let s = raw.replace(/[^\d,.\-()]/g, "");
+  if (!s) return null;
+  const negative = s.startsWith("-") || s.startsWith("(");
+  s = s.replace(/[-()]/g, "");
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  if (lastComma > lastDot) s = s.replace(/\./g, "").replace(",", ".");
+  else s = s.replace(/,/g, "");
+  const n = Number(s);
+  if (Number.isNaN(n)) return null;
+  return negative ? -n : n;
+}
+
+/** Accepts ISO dates (with time), DD/MM/YYYY and DD-MM-YYYY. */
+export function parseDate(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
+  if (m) {
+    const year = m[3].length === 2 ? `20${m[3]}` : m[3];
+    return `${year}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  }
+  return null;
+}
+
+export function parseCsv(text: string): { rows: ParsedRow[]; format: string; errors: string[] } {
+  const { data } = Papa.parse<string[]>(text.trim(), { skipEmptyLines: true });
+  const headerIndex = data.findIndex((r) => findColumn(r, COLUMNS.date) >= 0);
+  if (headerIndex < 0) return { rows: [], format: "unknown", errors: ["No encontré una columna de fecha"] };
+
+  const headers = data[headerIndex];
+  const col = Object.fromEntries(
+    Object.entries(COLUMNS).map(([k, names]) => [k, findColumn(headers, names)]),
+  ) as Record<keyof typeof COLUMNS, number>;
+  const format = col.product >= 0 && col.state >= 0 ? "revolut" : headers.some((h) => norm(h) === "transferwise id") ? "wise" : "csv";
+
+  const rows: ParsedRow[] = [];
+  const errors: string[] = [];
+  for (const [i, r] of data.slice(headerIndex + 1).entries()) {
+    // Revolut lists declined and reverted card payments too.
+    if (col.state >= 0 && !["completed", "completado"].includes(norm(r[col.state] ?? ""))) continue;
+    const date = parseDate(r[col.date]);
+    let amount = col.amount >= 0 ? parseAmount(r[col.amount]) : null;
+    if (amount == null && (col.debit >= 0 || col.credit >= 0)) {
+      const debit = parseAmount(r[col.debit]) ?? 0;
+      const credit = parseAmount(r[col.credit]) ?? 0;
+      amount = credit - Math.abs(debit);
+    }
+    if (!date || amount == null) {
+      errors.push(`Fila ${headerIndex + i + 2}: no pude leer fecha o monto`);
+      continue;
+    }
+    const fee = col.fee >= 0 ? (parseAmount(r[col.fee]) ?? 0) : 0;
+    rows.push({
+      date,
+      description: (r[col.description] ?? "").trim(),
+      amount: amount - Math.abs(fee),
+      currency: col.currency >= 0 ? r[col.currency]?.trim().toUpperCase() || undefined : undefined,
+      product: col.product >= 0 ? r[col.product]?.trim() : undefined,
+    });
+  }
+  return { rows, format, errors };
+}
