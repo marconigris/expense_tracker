@@ -63,6 +63,11 @@ export function Inbox({ rows: initial, entities }: { rows: InboxRow[]; entities:
     setLearn((l) => ({ ...l, [row.id]: l[row.id] ?? guessPattern(row.description) }));
   }
 
+  function setTransfer(row: InboxRow) {
+    update(row.id, { kind: "transfer", entityId: null, category: null });
+    setLearn((l) => ({ ...l, [row.id]: l[row.id] ?? guessPattern(row.description) }));
+  }
+
   function confirm(row: InboxRow) {
     setRows((rs) => rs.filter((r) => r.id !== row.id));
     startTransition(() =>
@@ -80,7 +85,7 @@ export function Inbox({ rows: initial, entities }: { rows: InboxRow[]; entities:
       else if (e.key === "k" || e.key === "ArrowUp") setActive((i) => Math.max(i - 1, 0));
       else if (!row) return;
       else if (e.key === "Enter") confirm(row);
-      else if (e.key === "t") update(row.id, { kind: "transfer", entityId: null, category: null });
+      else if (e.key === "t") setTransfer(row);
       else {
         const entity = entities.find((x) => x.shortcut === e.key);
         if (entity) setEntity(row, entity.id);
@@ -150,9 +155,7 @@ export function Inbox({ rows: initial, entities }: { rows: InboxRow[]; entities:
                 <select
                   value={row.kind === "transfer" ? "transfer" : (row.entityId ?? "")}
                   onChange={(e) =>
-                    e.target.value === "transfer"
-                      ? update(row.id, { kind: "transfer", entityId: null, category: null })
-                      : setEntity(row, e.target.value)
+                    e.target.value === "transfer" ? setTransfer(row) : setEntity(row, e.target.value)
                   }
                   className="min-w-0 flex-1 rounded-md border border-line bg-bg px-1.5 py-1"
                 >
@@ -187,7 +190,7 @@ export function Inbox({ rows: initial, entities }: { rows: InboxRow[]; entities:
                   ✓
                 </button>
               </div>
-              {isActive && learn[row.id] !== undefined && row.kind !== "transfer" && (
+              {isActive && learn[row.id] !== undefined && (
                 <label className="col-span-2 flex items-center gap-2 text-xs text-muted md:order-6 md:col-span-5">
                   Recordar para descripciones que contengan
                   <input

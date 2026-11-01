@@ -46,7 +46,7 @@ export const ACCOUNTS: AccountSeed[] = [
   { slug: "revolut-ahorro-eur", name: "Revolut Ahorro EUR", institution: "Revolut", currency: "EUR", kind: "savings", defaultEntity: "inversiones" },
   { slug: "revolut-ahorro-usd", name: "Revolut Ahorro USD", institution: "Revolut", currency: "USD", kind: "savings", defaultEntity: "inversiones" },
   { slug: "revolut-pro", name: "Revolut Pro", institution: "Revolut", currency: "EUR", kind: "bank", defaultEntity: "coaching", hint: "Links de pago: cobros de clientes de coaching." },
-  { slug: "brubank-ars", name: "Brubank ARS", institution: "Brubank", currency: "ARS", kind: "bank", defaultEntity: "coaching", hint: "Cobros de coaching de clientes de Argentina, impuestos de Argentina, algunos pagos en Brasil." },
+  { slug: "brubank-ars", name: "Brubank ARS", institution: "Brubank", currency: "ARS", kind: "bank", defaultEntity: "coaching", hint: "Cobros de coaching de clientes de Argentina, impuestos y coaching de negocio, algunos pagos en Brasil." },
   { slug: "brubank-usd", name: "Brubank USD", institution: "Brubank", currency: "USD", kind: "bank", defaultEntity: "coaching", hint: "Cobros de coaching de clientes de Argentina en dólares." },
   { slug: "arq-usd", name: "ARQ USD", institution: "ARQ", currency: "USD", kind: "bank", defaultEntity: "coaching", hint: "Pago de ads del coaching (Meta, Google) y gastos de Argentina en dólares; también pagos en Brasil." },
   { slug: "cocos-usd", name: "Cocos USD", institution: "Cocos", currency: "USD", kind: "broker", defaultEntity: "inversiones", hint: "Inversión. A veces se pagan cosas del coaching o de la vida en Brasil." },
@@ -65,7 +65,7 @@ export const ACCOUNTS: AccountSeed[] = [
 
 export const CATEGORIES: Record<string, string[]> = {
   personal: ["Comida", "Restaurantes", "Transporte", "Viajes", "Salud", "Ropa", "Suscripciones", "Educación", "Regalos", "Impuestos", "Otros"],
-  business: ["Cobro cliente", "Retiro", "Ads", "Software", "Monotributo", "Comisiones", "Intereses a papá", "Otros"],
+  business: ["Cobro cliente", "Retiro", "Ads", "Software", "Coaching de negocio", "Monotributo", "Comisiones", "Intereses a papá", "Otros"],
   household: ["Alquiler", "Supermercado", "Restaurantes", "Servicios", "Transporte", "Casa", "Otros"],
   property: ["Aporte", "Distribución", "Mantenimiento", "Impuestos", "Otros"],
   investment: ["Intereses", "Rendimiento", "Comisiones"],
