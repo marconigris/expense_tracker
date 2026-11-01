@@ -6,6 +6,7 @@ export type ParsedRow = {
   amount: number; // signed, negative = money out
   currency?: string; // when the file mixes currencies (Revolut, Wise)
   product?: string; // Revolut "Current" / "Savings" / "Deposit"
+  reference?: string; // bank transaction identifier, when available
 };
 
 const norm = (s: string) =>
@@ -20,6 +21,7 @@ const COLUMNS = {
   fee: ["fee", "comision"],
   currency: ["currency", "moneda"],
   product: ["product"],
+  reference: ["reference", "transaction id", "transferwise id", "external id"],
   state: ["state", "estado"],
 };
 
@@ -95,6 +97,7 @@ export function parseCsv(text: string): { rows: ParsedRow[]; format: string; err
       amount: amount - Math.abs(fee),
       currency: col.currency >= 0 ? r[col.currency]?.trim().toUpperCase() || undefined : undefined,
       product: col.product >= 0 ? r[col.product]?.trim() : undefined,
+      reference: col.reference >= 0 ? r[col.reference]?.trim() || undefined : undefined,
     });
   }
   return { rows, format, errors };

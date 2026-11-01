@@ -72,9 +72,35 @@ export async function importRows(input: {
       errors.push(`${row.date} ${row.description}: no hay cuenta ${selected.institution} en ${row.currency}`);
       continue;
     }
-    const dedupeKey = createHash("sha1")
-      .update([account.id, row.date, row.amount.toFixed(2), normalizeDescription(row.description)].join("|"))
-      .digest("hex");
+    const identity = [account.id, row.date, row.amount.toFixed(2), normalizeDescription(row.description)];
+    const legacyKey = createHash("sha1").update(identity.join("|")).digest("hex");
+    const dedupeKey = row.reference
+      ? createHash("sha1").update([...identity, row.reference].join("|")).digest("hex")
+      : legacyKey;
+
+    // Align imports made before reference-aware deduplication with the bank reference.
+    // After this one-time update, another row with the same details can be inserted.
+    if (row.reference) {
+      const [existingWithReference] = await db
+        .select({ id: t.transactions.id })
+        .from(t.transactions)
+        .where(eq(t.transactions.dedupeKey, dedupeKey))
+        .limit(1);
+      if (existingWithReference) {
+        duplicates++;
+        continue;
+      }
+      const [legacy] = await db
+        .select({ id: t.transactions.id })
+        .from(t.transactions)
+        .where(eq(t.transactions.dedupeKey, legacyKey))
+        .limit(1);
+      if (legacy) {
+        await db.update(t.transactions).set({ dedupeKey }).where(eq(t.transactions.id, legacy.id));
+        duplicates++;
+        continue;
+      }
+    }
     const [inserted] = await db
       .insert(t.transactions)
       .values({
