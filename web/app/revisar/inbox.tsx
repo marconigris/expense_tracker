@@ -68,6 +68,11 @@ export function Inbox({ rows: initial, entities }: { rows: InboxRow[]; entities:
     setLearn((l) => ({ ...l, [row.id]: l[row.id] ?? guessPattern(row.description) }));
   }
 
+  function setCategory(row: InboxRow, category: string) {
+    update(row.id, { category: category || null });
+    if (category) setLearn((l) => ({ ...l, [row.id]: l[row.id] ?? guessPattern(row.description) }));
+  }
+
   function confirm(row: InboxRow) {
     setRows((rs) => rs.filter((r) => r.id !== row.id));
     startTransition(() =>
@@ -170,7 +175,7 @@ export function Inbox({ rows: initial, entities }: { rows: InboxRow[]; entities:
                 {row.kind !== "transfer" && entity && (
                   <select
                     value={row.category ?? ""}
-                    onChange={(e) => update(row.id, { category: e.target.value || null })}
+                    onChange={(e) => setCategory(row, e.target.value)}
                     className="min-w-0 flex-1 rounded-md border border-line bg-bg px-1.5 py-1"
                   >
                     <option value="">Categoría</option>
