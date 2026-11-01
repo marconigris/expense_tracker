@@ -108,6 +108,17 @@ export async function pendingCount() {
   return r.n;
 }
 
+/** Money advanced to others, less repayments, across all confirmed history. */
+export async function receivableBalances(currency: Currency) {
+  const amount = currency === "USD" ? t.transactions.amountUsd : t.transactions.amountEur;
+  const rows = await db
+    .select({ person: t.transactions.category, balance: sql<string>`-coalesce(sum(${amount}), 0)` })
+    .from(t.transactions)
+    .where(and(eq(t.transactions.status, "confirmed"), eq(t.transactions.kind, "receivable")))
+    .groupBy(t.transactions.category);
+  return rows.filter((r) => r.person && Number(r.balance) !== 0).map((r) => ({ person: r.person!, balance: Number(r.balance) }));
+}
+
 /** Capital Marco has in each property and what it returned in the last 12 months. */
 export async function propertyYields() {
   const amount = t.transactions.amountUsd;
@@ -116,7 +127,7 @@ export async function propertyYields() {
   const returns = await db
     .select({ entityId: t.transactions.entityId, total: sql<string>`coalesce(sum(${amount}) filter (where ${amount} > 0), 0)` })
     .from(t.transactions)
-    .where(and(eq(t.transactions.status, "confirmed"), gte(t.transactions.date, monthsAgo(11))))
+    .where(and(eq(t.transactions.status, "confirmed"), eq(t.transactions.kind, "normal"), gte(t.transactions.date, monthsAgo(11))))
     .groupBy(t.transactions.entityId);
   return props.map((p: Entity) => {
     const latest = vals.filter((v) => v.entityId === p.id).sort((a, b) => b.date.localeCompare(a.date))[0];

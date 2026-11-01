@@ -26,7 +26,7 @@ export type Decision = {
   id: string;
   entityId: string | null;
   category: string | null;
-  kind: "normal" | "transfer" | "settlement" | "opening";
+  kind: "normal" | "transfer" | "settlement" | "opening" | "excluded" | "receivable";
   paidBy?: "marco" | "moni";
   // Pattern to learn from this decision, e.g. "mercadona".
   rulePattern?: string;
@@ -38,8 +38,8 @@ export async function confirmAction(decisions: Decision[]) {
     await db
       .update(t.transactions)
       .set({
-        entityId: d.kind === "transfer" ? null : d.entityId,
-        category: d.kind === "transfer" ? null : d.category,
+        entityId: d.kind === "transfer" || d.kind === "excluded" ? null : d.entityId,
+        category: d.kind === "transfer" || d.kind === "excluded" ? null : d.category,
         kind: d.kind,
         ...(d.paidBy ? { paidBy: d.paidBy } : {}),
         status: "confirmed",
@@ -48,7 +48,7 @@ export async function confirmAction(decisions: Decision[]) {
       .where(eq(t.transactions.id, d.id));
 
     const pattern = d.rulePattern?.trim().toLowerCase();
-    if (pattern && pattern.length >= 3) {
+    if (d.kind !== "excluded" && pattern && pattern.length >= 3) {
       const [tx] = await db.select().from(t.transactions).where(eq(t.transactions.id, d.id));
       await db.insert(t.rules).values({
         pattern,

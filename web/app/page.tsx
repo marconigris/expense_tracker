@@ -3,7 +3,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { formatMoney } from "@/lib/format";
-import { custodyBalances, monthlySummary, pendingCount, propertyYields, type Currency } from "@/lib/reports";
+import { custodyBalances, monthlySummary, pendingCount, propertyYields, receivableBalances, type Currency } from "@/lib/reports";
 
 export default function HomePage({ searchParams }: PageProps<"/">) {
   return (
@@ -19,11 +19,12 @@ async function Dashboard({ searchParams }: Pick<PageProps<"/">, "searchParams">)
   await connection();
   await requireOwner();
   const currency: Currency = (await searchParams).moneda === "EUR" ? "EUR" : "USD";
-  const [months, custody, pending, properties] = await Promise.all([
+  const [months, custody, pending, properties, receivables] = await Promise.all([
     monthlySummary(currency),
     custodyBalances(),
     pendingCount(),
     propertyYields(),
+    receivableBalances(currency),
   ]);
 
   const n = months.length;
@@ -124,6 +125,17 @@ async function Dashboard({ searchParams }: Pick<PageProps<"/">, "searchParams">)
             </div>
           ))}
         </section>
+        {receivables.length > 0 && (
+          <section className="rounded-xl border border-line bg-card p-4 text-sm">
+            <h2 className="mb-2 font-medium">Adelantos por conciliar</h2>
+            {receivables.map((r) => (
+              <div key={r.person} className="flex justify-between py-1">
+                <span className="text-muted">{r.person}</span>
+                <span className="tabular-nums">≈ {formatMoney(r.balance, currency)}</span>
+              </div>
+            ))}
+          </section>
+        )}
       </div>
     </div>
   );

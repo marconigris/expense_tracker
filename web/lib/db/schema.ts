@@ -28,10 +28,12 @@ export const entityKind = pgEnum("entity_kind", [
 export const accountKind = pgEnum("account_kind", ["bank", "savings", "broker", "cash", "crypto"]);
 
 // normal: counts as income/expense for its entity (sign tells which).
-// transfer: between two of Marco's accounts, ignored in reports.
+// transfer: between Marco's accounts, including untracked services, ignored in reports.
 // settlement: Moni paying Marco back (or vice versa) for a household.
 // opening: initial balance of an account, only affects balances.
-export const txKind = pgEnum("tx_kind", ["normal", "transfer", "settlement", "opening"]);
+// excluded: kept for account history but already recorded elsewhere or outside this period.
+// receivable: an advance to someone, or its repayment; outstanding principal is tracked separately.
+export const txKind = pgEnum("tx_kind", ["normal", "transfer", "settlement", "opening", "excluded", "receivable"]);
 
 export const txStatus = pgEnum("tx_status", ["pending", "suggested", "confirmed"]);
 

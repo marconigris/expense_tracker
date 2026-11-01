@@ -68,6 +68,15 @@ export function Inbox({ rows: initial, entities }: { rows: InboxRow[]; entities:
     setLearn((l) => ({ ...l, [row.id]: l[row.id] ?? guessPattern(row.description) }));
   }
 
+  function setExcluded(row: InboxRow) {
+    update(row.id, { kind: "excluded", entityId: null, category: null });
+    setLearn((l) => {
+      const next = { ...l };
+      delete next[row.id];
+      return next;
+    });
+  }
+
   function setCategory(row: InboxRow, category: string) {
     update(row.id, { category: category || null });
     if (category) setLearn((l) => ({ ...l, [row.id]: l[row.id] ?? guessPattern(row.description) }));
@@ -158,21 +167,22 @@ export function Inbox({ rows: initial, entities }: { rows: InboxRow[]; entities:
               </div>
               <div className="col-span-2 flex gap-1.5 md:order-4 md:col-span-1">
                 <select
-                  value={row.kind === "transfer" ? "transfer" : (row.entityId ?? "")}
+                  value={row.kind === "transfer" || row.kind === "excluded" ? row.kind : (row.entityId ?? "")}
                   onChange={(e) =>
-                    e.target.value === "transfer" ? setTransfer(row) : setEntity(row, e.target.value)
+                    e.target.value === "transfer" ? setTransfer(row) : e.target.value === "excluded" ? setExcluded(row) : setEntity(row, e.target.value)
                   }
                   className="min-w-0 flex-1 rounded-md border border-line bg-bg px-1.5 py-1"
                 >
                   <option value="">—</option>
                   <option value="transfer">↔ Transferencia</option>
+                  <option value="excluded">Excluir del resumen</option>
                   {entities.map((e) => (
                     <option key={e.id} value={e.id}>
                       {e.name}
                     </option>
                   ))}
                 </select>
-                {row.kind !== "transfer" && entity && (
+                {row.kind !== "transfer" && row.kind !== "excluded" && entity && (
                   <select
                     value={row.category ?? ""}
                     onChange={(e) => setCategory(row, e.target.value)}
@@ -189,7 +199,7 @@ export function Inbox({ rows: initial, entities }: { rows: InboxRow[]; entities:
                 <Confidence value={row.confidence} source={row.suggestedBy} />
                 <button
                   onClick={() => confirm(row)}
-                  disabled={row.kind !== "transfer" && !row.entityId}
+                  disabled={row.kind !== "transfer" && row.kind !== "excluded" && !row.entityId}
                   className="rounded-md border border-line px-2 py-1 hover:bg-accent hover:text-white disabled:opacity-30"
                 >
                   ✓
