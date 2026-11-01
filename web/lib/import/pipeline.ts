@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { classifyPending } from "../classify";
 import { db, t } from "../db";
 import type { Account } from "../db/schema";
@@ -66,6 +66,8 @@ export async function importRows(input: {
 
   const insertedIds: string[] = [];
   let duplicates = 0;
+  const noReferenceOccurrences = new Map<string, number>();
+  const existingNoReferenceCounts = new Map<string, number>();
   for (const row of rows) {
     const account = routeRow(row, selected, siblings);
     if (!account) {
@@ -74,7 +76,7 @@ export async function importRows(input: {
     }
     const identity = [account.id, row.date, row.amount.toFixed(2), normalizeDescription(row.description)];
     const legacyKey = createHash("sha1").update(identity.join("|")).digest("hex");
-    const dedupeKey = row.reference
+    let dedupeKey = row.reference
       ? createHash("sha1").update([...identity, row.reference].join("|")).digest("hex")
       : legacyKey;
 
@@ -99,6 +101,29 @@ export async function importRows(input: {
         await db.update(t.transactions).set({ dedupeKey }).where(eq(t.transactions.id, legacy.id));
         duplicates++;
         continue;
+      }
+    } else {
+      const occurrence = (noReferenceOccurrences.get(legacyKey) ?? 0) + 1;
+      noReferenceOccurrences.set(legacyKey, occurrence);
+      let existingCount = existingNoReferenceCounts.get(legacyKey);
+      if (existingCount === undefined) {
+        const matches = await db
+          .select({ description: t.transactions.description })
+          .from(t.transactions)
+          .where(and(
+            eq(t.transactions.accountId, account.id),
+            eq(t.transactions.date, row.date),
+            eq(t.transactions.amount, row.amount.toFixed(2)),
+          ));
+        existingCount = matches.filter((tx) => normalizeDescription(tx.description) === identity[3]).length;
+        existingNoReferenceCounts.set(legacyKey, existingCount);
+      }
+      if (occurrence <= existingCount) {
+        duplicates++;
+        continue;
+      }
+      if (occurrence > 1) {
+        dedupeKey = createHash("sha1").update([...identity, `row:${occurrence}`].join("|")).digest("hex");
       }
     }
     const [inserted] = await db

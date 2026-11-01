@@ -85,10 +85,12 @@ Scripts load `web/.env`, overridden by `web/.env.prod` if present (put the Neon 
 
 ## Status (2026-11-01)
 
-Done: schema, seed, CSV import, transfer/rule/account classification, Codex scripts (tested on Marco's plan), review inbox, dashboard (USD/EUR), email+password auth, first Vercel deploy attempt.
+Done: schema, seed, CSV import, transfer/rule/account classification, Codex scripts (tested on Marco's plan), review inbox, dashboard (USD/EUR), email+password auth, production deploy, Marco's login. Neon is connected in Vercel; `web/.env.prod` points local scripts at Neon. Moni's password is still pending; never ask for or handle either password.
+
+Current backfill: shared Europe expenses through 2026-08-08 are already in Tricount. Shared Europe expenses from 2026-08-09 through September go to Tricount "Tarifa 2026"; other personal/business transactions from August go to v2. From October onward, all transactions, including Vida Brasil, go to v2. Brubank August–October (54 rows) is imported and confirmed in production: 16/15/23 rows by month. The nine opaque October USD "Débito en Cuenta" rows are PIX spending in Vida Brasil, category `Otros`, paid by Marco and shared 50/50 with Moni. AGILPAGOS transfers went to Cocos. Brubank CSV imports now use bank references to distinguish same-day identical debits.
 
 Next, in order:
-1. **Finish production setup** (Marco is doing the dashboard parts): Neon connected with prefix `DATABASE`, `AUTH_SECRET` set in Vercel, redeploy. Then Marco puts the Neon URL in `web/.env.prod` and runs `npm run set-password -- nigris.marco@gmail.com` and the same for `monica.gilardoni00@gmail.com`. Never ask for or handle the passwords yourself.
+1. **Continue statement backfill** for other accounts, applying the Tricount/v2 date boundary above. Moni can set her password when she needs access; her views are not implemented yet.
 2. **Migrate v1 data** from Google Sheets (prod spreadsheet; staging id `1qv2AF8aF-Cq0pBtD9igCQP76Kj7vDq4yq06tCQZgcKg` is NOT prod). v1 schema: 17 columns (`Date, Amount, Type, Category, Description, Currency Amount, Currency, User, Marco Split %, Moni Split %, Account, Scope, Source, Import Batch ID, External ID, Reconciled, Match ID`); v1 split columns mean *who paid*, not who owes. Map v1 projects: Cabarete → Vida Cabarete, Hymerlife → archived (sold), Cash USD/EUR/USDT → accounts, Coaching/Bora Vida/Adventure Planning → entities. Find where v1 data stops (last seen ~2026-03-22, unverified) — Marco must backfill from there with statements.
 3. **Moni's view**: mobile-first quick entry (PWA) for household + La Mariposa expenses she pays from her own accounts (`account_id = null`, `paid_by = moni`), and a settlement view per household. She must only see `shared_with_moni` entities.
 4. **Balances / net worth**: per-account opening balances (`kind = opening`) so the dashboard can show where money sits, minus custody. Yield per investment account (interest ÷ average balance).
