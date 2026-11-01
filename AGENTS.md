@@ -37,7 +37,9 @@ It does NOT measure business profitability (each business has its own accounting
     (bank USD 46,859 · cash USD 30,405 · bank EUR 25,000). Dad's own sheet says 77,274 USD total vs 77,264 here — unresolved.
 - **Transaction**: signed amount in its original currency, plus `amount_usd` / `amount_eur` at that day's rate.
   ARS → USD uses the **MEP** rate (ArgentinaDatos "bolsa"); EUR via Frankfurter. USDT = USD.
-  `kind`: `normal` | `transfer` (between Marco's own accounts; ignored in reports) | `settlement` | `opening`.
+  `kind`: `normal` | `transfer` (between Marco's own accounts; ignored in reports) | `settlement` | `opening` |
+  `excluded` (kept for account history, excluded from reports) | `receivable` (advances and repayments, excluded
+  from income/consumption and shown as an amount to reconcile).
   `status`: `pending` → `suggested` → `confirmed`. Reports only use confirmed.
 - Reporting: overall picture in USD, plus a native EUR view (Marco lives part of the year in Europe).
   Headline = average monthly (last 12 months) income reaching Marco − his consumption.
@@ -65,7 +67,7 @@ Scripts load `web/.env`, overridden by `web/.env.prod` if present (put the Neon 
 
 - `lib/db/schema.ts` — Drizzle schema. Migrations in `drizzle/` (generate with `npm run db:generate`, never edit applied ones).
 - `lib/import/csv.ts` — CSV parser (Revolut, Wise, generic; handles `1.234,56` and DD/MM/YYYY).
-- `lib/import/pipeline.ts` — `importStatement` (CSV) / `importRows`: routes multi-currency rows to sibling accounts of the same institution, dedupes (sha1 of account|date|amount|description), converts FX, then `classifyPending`.
+- `lib/import/pipeline.ts` — `importStatement` (CSV) / `importRows`: routes multi-currency rows to sibling accounts of the same institution, dedupes using transaction details and bank references when available, converts FX, then `classifyPending`.
 - `lib/classify.ts` — transfer pairing, rule matching, account fallback, and `refineWithAi(ask)` (AI injected).
 - `lib/fx.ts` — rate fetching/caching in `fx_rates`.
 - `lib/reports.ts` — the Marco-centric math for the dashboard. Read its doc comment before changing numbers.
@@ -88,6 +90,8 @@ Scripts load `web/.env`, overridden by `web/.env.prod` if present (put the Neon 
 Done: schema, seed, CSV import, transfer/rule/account classification, Codex scripts (tested on Marco's plan), review inbox, dashboard (USD/EUR), email+password auth, production deploy, Marco's login. Neon is connected in Vercel; `web/.env.prod` points local scripts at Neon. Moni's password is still pending; never ask for or handle either password.
 
 Current backfill: shared Europe expenses through 2026-08-08 are already in Tricount. Shared Europe expenses from 2026-08-09 through September go to Tricount "Tarifa 2026"; other personal/business transactions from August go to v2. From October onward, all transactions, including Vida Brasil, go to v2. Brubank August–October (54 rows) is imported and confirmed in production: 16/15/23 rows by month. The nine opaque October USD "Débito en Cuenta" rows are PIX spending in Vida Brasil, category `Otros`, paid by Marco and shared 50/50 with Moni. AGILPAGOS transfers went to Cocos. Brubank CSV imports now use bank references to distinguish same-day identical debits.
+
+Marco subsequently requested Brubank January–July too: all 113 statement rows are imported in production, 112 confirmed and one February ARS 295.96 digital-services tax still awaiting identification. Starlink February–April was already in Tricount and is `excluded` (including its reversal); a January payment from Marianela relates to 2025 and is also excluded. May–July Starlink payments were advances for Ale: Marco says they were repaid; they are `receivable`, category `Ale`, until the incoming Revolut/Wise payments can be matched. PREX transfers are excluded from income and consumption; a separate USD 12.19 Coaching/Ads expense is inferred from the net amount, dated on the May reimbursement because the actual ad date is unknown. v1 may overlap the January–March Brubank imports: prevent duplicates when migrating it.
 
 Next, in order:
 1. **Continue statement backfill** for other accounts, applying the Tricount/v2 date boundary above. Moni can set her password when she needs access; her views are not implemented yet.
