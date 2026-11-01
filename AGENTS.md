@@ -27,7 +27,7 @@ It does NOT measure business profitability (each business has its own accounting
     transfers from Adventure Planning) minus business costs Marco paid (ads, monotributo).
     Coaching runs through Marco's personal accounts: every client payment is Coaching income to Marco (option A).
     Bora and Adventure Planning have their own accounts, outside the app.
-  - `household` — Hogar Europa / Hogar Cabarete / Hogar Brasil, shared 50/50 with Moni (partner). Marco's
+  - `household` — Vida Europa / Vida Cabarete / Vida Brasil, shared 50/50 with Moni (partner). Marco's
     consumption is 50% of everything spent there, whoever paid. `paid_by` records who paid; settlement = paid − 50%.
   - `property` — La Mariposa (50% with Moni, 120k USD capital total), Marquis Panamá (33% with Marco's dad,
     157k USD capital total). Contributions are capital, not spending; distributions are income.
@@ -44,6 +44,7 @@ It does NOT measure business profitability (each business has its own accounting
 
 Catalog of entities, accounts, categories and starter rules: `web/lib/catalog.ts` (seed upserts by slug).
 Account hints there describe how Marco uses each account; keep them accurate, they feed the AI prompt.
+Coaching expenses for Sole and Udemy use the `Trainings` category, not `Suscripciones`.
 
 ## Month-end workflow the app is built around
 
@@ -88,7 +89,7 @@ Done: schema, seed, CSV import, transfer/rule/account classification, Codex scri
 
 Next, in order:
 1. **Finish production setup** (Marco is doing the dashboard parts): Neon connected with prefix `DATABASE`, `AUTH_SECRET` set in Vercel, redeploy. Then Marco puts the Neon URL in `web/.env.prod` and runs `npm run set-password -- nigris.marco@gmail.com` and the same for `monica.gilardoni00@gmail.com`. Never ask for or handle the passwords yourself.
-2. **Migrate v1 data** from Google Sheets (prod spreadsheet; staging id `1qv2AF8aF-Cq0pBtD9igCQP76Kj7vDq4yq06tCQZgcKg` is NOT prod). v1 schema: 17 columns (`Date, Amount, Type, Category, Description, Currency Amount, Currency, User, Marco Split %, Moni Split %, Account, Scope, Source, Import Batch ID, External ID, Reconciled, Match ID`); v1 split columns mean *who paid*, not who owes. Map v1 projects: Cabarete → Hogar Cabarete, Hymerlife → archived (sold), Cash USD/EUR/USDT → accounts, Coaching/Bora Vida/Adventure Planning → entities. Find where v1 data stops (last seen ~2026-03-22, unverified) — Marco must backfill from there with statements.
+2. **Migrate v1 data** from Google Sheets (prod spreadsheet; staging id `1qv2AF8aF-Cq0pBtD9igCQP76Kj7vDq4yq06tCQZgcKg` is NOT prod). v1 schema: 17 columns (`Date, Amount, Type, Category, Description, Currency Amount, Currency, User, Marco Split %, Moni Split %, Account, Scope, Source, Import Batch ID, External ID, Reconciled, Match ID`); v1 split columns mean *who paid*, not who owes. Map v1 projects: Cabarete → Vida Cabarete, Hymerlife → archived (sold), Cash USD/EUR/USDT → accounts, Coaching/Bora Vida/Adventure Planning → entities. Find where v1 data stops (last seen ~2026-03-22, unverified) — Marco must backfill from there with statements.
 3. **Moni's view**: mobile-first quick entry (PWA) for household + La Mariposa expenses she pays from her own accounts (`account_id = null`, `paid_by = moni`), and a settlement view per household. She must only see `shared_with_moni` entities.
 4. **Balances / net worth**: per-account opening balances (`kind = opening`) so the dashboard can show where money sits, minus custody. Yield per investment account (interest ÷ average balance).
 5. Charts (monthly bars), sign-out button, editing accounts/rules from the UI, Excel import.

@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db, t } from "../lib/db";
 import { ACCOUNTS, CUSTODY_OPENING, ENTITIES, SEED_RULES } from "../lib/catalog";
 
@@ -8,6 +8,19 @@ async function main() {
     await db.insert(t.entities).values(values).onConflictDoUpdate({ target: t.entities.slug, set: values });
   }
   const entityIds = Object.fromEntries((await db.select().from(t.entities)).map((e) => [e.slug, e.id]));
+
+  await db
+    .update(t.transactions)
+    .set({ category: "Trainings" })
+    .where(and(eq(t.transactions.entityId, entityIds.coaching), eq(t.transactions.category, "Coaching de negocio")));
+  await db
+    .update(t.rules)
+    .set({ category: "Trainings" })
+    .where(and(eq(t.rules.entityId, entityIds.coaching), eq(t.rules.category, "Coaching de negocio")));
+  await db
+    .update(t.rules)
+    .set({ entityId: entityIds.coaching, category: "Trainings", kind: "normal" })
+    .where(and(eq(t.rules.pattern, "udemy"), eq(t.rules.kind, "normal")));
 
   for (const [i, { defaultEntity, ...a }] of ACCOUNTS.entries()) {
     const values = { ...a, defaultEntityId: entityIds[defaultEntity], sortOrder: i };
@@ -43,6 +56,20 @@ async function main() {
       { entityId: entityIds["la-mariposa"], date: "2026-11-01", value: "120000", currency: "USD", notes: "Capital aportado total; Marco tiene 50%" },
       { entityId: entityIds["marquis"], date: "2026-11-01", value: "157000", currency: "USD", notes: "Capital aportado total; Marco tiene 33%" },
     ]);
+  }
+
+  const udemyRules = await db
+    .select({ id: t.rules.id })
+    .from(t.rules)
+    .where(and(eq(t.rules.pattern, "udemy"), isNull(t.rules.accountId), eq(t.rules.direction, "out")))
+    .limit(1);
+  if (udemyRules.length === 0) {
+    await db.insert(t.rules).values({
+      pattern: "udemy",
+      direction: "out",
+      entityId: entityIds.coaching,
+      category: "Trainings",
+    });
   }
 
   console.log(`Seeded ${ENTITIES.length} entities and ${ACCOUNTS.length} accounts`);
