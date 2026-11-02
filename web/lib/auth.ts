@@ -27,6 +27,6 @@ export async function requireOwner() {
 /** Partner-only entry points never accept the owner's identity. */
 export async function requirePartner() {
   const user = await requireUser();
-  if (user.role !== "partner") throw new Error("Solo Moni puede cargar desde esta pantalla");
+  if (user.role !== "partner") redirect("/");
   return user;
 }
