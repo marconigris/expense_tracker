@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { requireOwner } from "@/lib/auth";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatMoneyInText } from "@/lib/format";
 import { sharedReport } from "@/lib/shared-report";
 
 export default function MoniPage() {
@@ -27,7 +27,7 @@ async function Content() {
       {data.entities.map((e) => <div key={e.id} className="flex flex-wrap justify-between gap-2 border-b border-line py-2 last:border-0"><span>{e.name}</span><span className="text-right tabular-nums">{e.balances.length ? e.balances.map((v) => <span key={v.currency} className="block">{balance(v.cents, v.currency)}</span>) : <span className="text-muted">Sin saldo pendiente</span>}</span></div>)}
     </section>
     <section className="overflow-hidden rounded-xl border border-line bg-card"><h2 className="border-b border-line px-4 py-3 font-medium">Movimientos incluidos</h2>
-      {data.details.length === 0 ? <p className="p-4 text-sm text-muted">No hay movimientos con saldo pendiente.</p> : <div className="divide-y divide-line">{data.details.map((row) => <div key={row.id} className="flex flex-wrap justify-between gap-2 px-4 py-3 text-sm"><div><p>{row.description}</p><p className="text-xs text-muted">{row.date} · {row.entity} · {row.kind === "opening" ? "Saldo anterior" : row.kind === "settlement" ? "Liquidación" : `${row.amount < 0 ? "pagó" : "cobró"} ${row.paidBy === "marco" ? "Marco" : "Moni"}`} · {formatMoney(Math.abs(row.amount), row.originalCurrency)} {row.originalCurrency}</p>{(row.entityKind === "payable" || row.kind === "opening") && row.notes && <p className="mt-1 max-w-xl text-xs text-muted">{row.notes}</p>}</div><span className="text-right tabular-nums">{balance(row.cents, row.currency)}</span></div>)}</div>}
+      {data.details.length === 0 ? <p className="p-4 text-sm text-muted">No hay movimientos con saldo pendiente.</p> : <div className="divide-y divide-line">{data.details.map((row) => <div key={row.id} className="flex flex-wrap justify-between gap-2 px-4 py-3 text-sm"><div><p>{formatMoneyInText(row.description)}</p><p className="text-xs text-muted">{row.date} · {row.entity} · {row.kind === "opening" ? "Saldo anterior" : row.kind === "settlement" ? "Liquidación" : `${row.amount < 0 ? "pagó" : "cobró"} ${row.paidBy === "marco" ? "Marco" : "Moni"}`} · {formatMoney(Math.abs(row.amount), row.originalCurrency)} {row.originalCurrency}</p>{(row.entityKind === "payable" || row.kind === "opening") && row.notes && <p className="mt-1 max-w-xl text-xs text-muted">{formatMoneyInText(row.notes)}</p>}</div><span className="text-right tabular-nums">{balance(row.cents, row.currency)}</span></div>)}</div>}
     </section>
   </div>;
 }
