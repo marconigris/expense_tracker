@@ -142,7 +142,7 @@ export const transactionAllocations = pgTable(
   (t) => [uniqueIndex("tx_allocation_owner_idx").on(t.transactionId, t.owner)],
 );
 
-// Partner-owned expense records are kept outside Marco's ledger when personal.
+// Partner-owned personal and business expenses are kept outside Marco's ledger.
 // Shared entries also link to exactly one transaction in the joint ledger.
 export const partnerExpenses = pgTable("partner_expenses", {
   id: uuid("id").primaryKey().defaultRandom(),

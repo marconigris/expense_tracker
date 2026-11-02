@@ -11,8 +11,17 @@ test("partner expenses are restricted to active shared household or property spa
   assert.equal(isPartnerExpenseSpace({ active: false, sharedWithMoni: true, kind: "household" }), false);
   assert.equal(isPartnerExpenseSpace({ active: true, sharedWithMoni: true, kind: "payable" }), false);
   assert.equal(partnerArea("personal"), "personal");
+  assert.equal(partnerArea("negocio"), "negocio");
   assert.throws(() => partnerArea("coaching"));
   assert.throws(() => partnerArea("__proto__"));
+});
+
+test("Moni's business expenses stay separate from her personal consumption", () => {
+  const rows = [
+    { date: "2026-10-01", area: "personal", amount: -20, amountUsd: -20, marcoShare: 0, allocations: [] },
+    { date: "2026-10-01", area: "negocio", amount: -75, amountUsd: -75, marcoShare: 0, allocations: [] },
+  ];
+  assert.deepEqual(partnerMonthly(rows), [{ month: "2026-10", total: 20, areas: { personal: 20, negocio: 75 }, missingFx: 0 }]);
 });
 
 test("monthly spending combines private costs and Moni's share without counting Marco's share", () => {

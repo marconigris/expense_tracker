@@ -11,7 +11,7 @@ export function partnerMonthly(rows: PartnerMonthlyInput[]) {
     months.set(month, item);
     if (row.amount === 0) continue;
     if (row.amountUsd == null) { item.missingFx++; continue; }
-    let ratio = row.area === "personal" ? 1 : 1 - row.marcoShare;
+    let ratio = row.area === "personal" || row.area === "negocio" ? 1 : 1 - row.marcoShare;
     if (row.allocations.length) {
       const amountCents = Math.round(row.amount * 100);
       const allocationCents = row.allocations.reduce((sum, a) => sum + Math.round(Number(a.amount) * 100), 0);
@@ -20,7 +20,7 @@ export function partnerMonthly(rows: PartnerMonthlyInput[]) {
       ratio = moni / row.amount;
     }
     const value = -row.amountUsd * ratio;
-    item.total += value;
+    if (row.area !== "negocio") item.total += value;
     item.areas[row.area] = (item.areas[row.area] ?? 0) + value;
   }
   return [...months.values()].sort((a, b) => b.month.localeCompare(a.month));
