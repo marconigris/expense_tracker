@@ -13,17 +13,19 @@ const norm = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 
 const COLUMNS = {
-  date: ["completed date", "fecha", "date", "fecha operacion", "started date", "fecha de operacion"],
-  description: ["description", "descripcion", "concepto", "detalle", "merchant", "payee"],
-  amount: ["amount", "importe", "monto", "valor"],
+  date: ["completed date", "fecha", "date", "fecha operacion", "started date", "fecha de operacion", "fechaejecucion"],
+  description: ["description", "descripcion", "concepto", "detalle", "merchant", "payee", "tipooperacion"],
+  amount: ["amount", "importe", "monto", "valor", "total"],
   debit: ["debit", "debito", "egreso", "paid out", "cargo"],
   credit: ["credit", "credito", "ingreso", "paid in", "abono"],
   fee: ["fee", "comision"],
   currency: ["currency", "moneda"],
   product: ["product"],
-  reference: ["reference", "transaction id", "transferwise id", "external id"],
+  reference: ["reference", "transaction id", "transferwise id", "external id", "nroticket"],
   state: ["state", "estado"],
   counterpartyName: ["name"],
+  instrument: ["instrumento"],
+  settlementDate: ["fechaliquidacion"],
 };
 
 function findColumn(headers: string[], names: string[]) {
@@ -50,6 +52,12 @@ export function parseAmount(raw: string | undefined): number | null {
   return negative ? -n : n;
 }
 
+/** Cocos uses dots as thousands separators and commas as decimal separators. */
+function parseCocosAmount(raw: string | undefined): number | null {
+  if (!raw) return null;
+  return parseAmount(raw.replace(/\./g, "").replace(",", "."));
+}
+
 /** Accepts ISO dates (with time), DD/MM/YYYY and DD-MM-YYYY. */
 export function parseDate(raw: string | undefined): string | null {
   if (!raw) return null;
@@ -73,16 +81,17 @@ export function parseCsv(text: string): { rows: ParsedRow[]; format: string; err
   const col = Object.fromEntries(
     Object.entries(COLUMNS).map(([k, names]) => [k, findColumn(headers, names)]),
   ) as Record<keyof typeof COLUMNS, number>;
+  const isCocos = headers.some((h) => norm(h) === "nroticket") && headers.some((h) => norm(h) === "tipooperacion") && headers.some((h) => norm(h) === "total");
   const isBunq = headers.some((h) => norm(h) === "interest date") && headers.some((h) => norm(h) === "counterparty");
-  const format = isBunq ? "bunq" : col.product >= 0 && col.state >= 0 ? "revolut" : headers.some((h) => norm(h) === "transferwise id") ? "wise" : "csv";
+  const format = isCocos ? "cocos" : isBunq ? "bunq" : col.product >= 0 && col.state >= 0 ? "revolut" : headers.some((h) => norm(h) === "transferwise id") ? "wise" : "csv";
 
   const rows: ParsedRow[] = [];
   const errors: string[] = [];
   for (const [i, r] of data.slice(headerIndex + 1).entries()) {
     // Revolut lists declined and reverted card payments too.
     if (col.state >= 0 && !["completed", "completado"].includes(norm(r[col.state] ?? ""))) continue;
-    const date = parseDate(r[col.date]);
-    let amount = col.amount >= 0 ? parseAmount(r[col.amount]) : null;
+    const date = parseDate(isCocos && col.settlementDate >= 0 ? r[col.settlementDate] : r[col.date]);
+    let amount = col.amount >= 0 ? (isCocos ? parseCocosAmount(r[col.amount]) : parseAmount(r[col.amount])) : null;
     if (amount == null && (col.debit >= 0 || col.credit >= 0)) {
       const debit = parseAmount(r[col.debit]) ?? 0;
       const credit = parseAmount(r[col.credit]) ?? 0;
@@ -92,12 +101,14 @@ export function parseCsv(text: string): { rows: ParsedRow[]; format: string; err
       errors.push(`Fila ${headerIndex + i + 2}: no pude leer fecha o monto`);
       continue;
     }
-    const fee = col.fee >= 0 ? (parseAmount(r[col.fee]) ?? 0) : 0;
+    // Cocos total is already net of fees and taxes.
+    const fee = !isCocos && col.fee >= 0 ? (parseAmount(r[col.fee]) ?? 0) : 0;
     const description = (r[col.description] ?? "").trim();
     const counterparty = isBunq ? (r[col.counterpartyName] ?? "").trim() : "";
+    const instrument = isCocos ? (r[col.instrument] ?? "").trim() : "";
     rows.push({
       date,
-      description: [counterparty, description].filter(Boolean).join(" — "),
+      description: [counterparty, description, instrument].filter(Boolean).join(" — "),
       amount: amount - Math.abs(fee),
       currency: col.currency >= 0 ? r[col.currency]?.trim().toUpperCase() || undefined : undefined,
       product: col.product >= 0 ? r[col.product]?.trim() : undefined,
