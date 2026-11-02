@@ -75,6 +75,7 @@ Scripts load `web/.env`, overridden by `web/.env.prod` if present (put the Neon 
   `requireOwner()` guards every page/server action today; Moni (`role = partner`) can sign in but has no views yet.
   Locally sign-in is skipped unless `AUTH_IN_DEV=1`.
 - `app/compartido/importar` — Moni's CSV import is a persistent inbox (`partner_import_rows`): uploads add rows as `pending` (deduped against saved `partner_expenses` by the same key), saving moves them to `partner_expenses`, discarded rows stay so re-imports don't resurrect them.
+- `lib/wealth.ts` / `app/patrimonio` — accounts and net-worth bubbles show only Marco's money. Dad's bank custody is placed per account with a `valuations` row that has both `account_id` and the `papa` entity (Bunq Ahorro EUR, Wise Main USD, Wise Savings USD as of 2026-11-02) and is subtracted from that account. Bubbles only subtract the cash Marco owes dad and any custody not placed in an account. When new custody interest or movements are recorded, update those placement rows or an "sin ubicar" amount appears. EUR stays in EUR; every other currency is converted to USD.
 - `app/` — pages: `/` dashboard, `/revisar` inbox, `/importar` upload, `/login`. Server actions in `app/actions.ts`.
 - `web/AGENTS.md` — Next.js note: this is Next 16 (Cache Components on, `proxy.ts` instead of middleware).
   Read `node_modules/next/dist/docs/` before using Next APIs. Data reads need `await connection()` inside a `<Suspense>`.
