@@ -13,6 +13,7 @@ async function Content() {
   const { rows, pending, totals } = await tarifaReport();
   return <div className="space-y-5">
     <div><h1 className="text-lg font-semibold">Tarifa 2026</h1><p className="text-sm text-muted">Gastos de Europa · 10/08 al 30/09</p></div>
+    <Link href="/periodo" className="block rounded-xl border border-line bg-card p-3 text-sm">Ver todos los movimientos del período →</Link>
     <section className="hero rounded-2xl p-5"><p className="text-sm opacity-80">Gastos confirmados para Tricount</p>
       {totals.length ? totals.map((t) => <div key={`${t.paidBy}-${t.currency}`} className="mt-2"><p className="text-xl font-semibold tabular-nums">{formatMoney(t.cents / 100, t.currency)} {t.currency}</p><p className="text-xs opacity-80">Pagó {t.paidBy === "marco" ? "Marco" : "Moni"}</p></div>) : <p className="mt-2">Todavía no hay gastos confirmados.</p>}
       <p className="mt-3 text-xs opacity-80">Cargá cada gasto con su pagador y reparto. El saldo final depende también de los pagos de Moni y del redondeo de Tricount.</p>

@@ -16,6 +16,7 @@ const NAV = [
   { href: "/patrimonio", label: "Patrimonio" },
   { href: "/moni", label: "Moni" },
   { href: "/tarifa", label: "Tarifa" },
+  { href: "/periodo", label: "Movimientos" },
   { href: "/revisar", label: "Revisar" },
   { href: "/importar", label: "Importar" },
 ];
