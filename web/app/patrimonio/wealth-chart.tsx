@@ -82,6 +82,6 @@ export function WealthChart({ currency, points }: { currency: string; points: We
       {([["Banco / Cash", shown.cash], ["Stocks / Fondos / Crypto", shown.stocks], ["Propiedades", shown.properties], ["Le debés a papá", -shown.debt]] as const)
         .map(([label, v]) => <div key={label} className="flex justify-between gap-2"><dt>{label}</dt><dd className="tabular-nums text-fg">{formatMoney(v, currency)}</dd></div>)}
     </dl>}
-    {points.length === 1 && <p className="mt-2 text-xs text-muted">Se guarda un punto por mes desde noviembre de 2026; la línea aparece con el segundo mes.</p>}
+    
   </figure>;
 }

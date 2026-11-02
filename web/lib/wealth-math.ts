@@ -100,3 +100,26 @@ export function placeCustody(bank: { currency: string; balance: number }[], hold
     return { currency, total, held, unplaced: Math.round((total - placed) * 100) / 100 };
   });
 }
+
+type Movement2 = { accountId: string | null; date: string; amount: string; status: string; batchId: string | null };
+
+/**
+ * Balance of each account at `date`, walking back from its latest known balance (`anchor`) by undoing the
+ * physical movements after `date`. Accounts without movements keep their anchor value (marked `assumed`).
+ */
+export function balanceAt(anchor: { value: number; date: string }, movements: Movement2[], date: string) {
+  if (date >= anchor.date) return { value: anchor.value, assumed: false };
+  const relevant = movements.filter((m) => m.batchId != null || m.status === "confirmed");
+  const after = relevant.filter((m) => m.date > date && m.date <= anchor.date);
+  const cents = Math.round(anchor.value * 100) - after.reduce((sum, m) => sum + Math.round(Number(m.amount) * 100), 0);
+  return { value: cents / 100, assumed: relevant.length === 0 };
+}
+
+/** Last day of each month from `from` (YYYY-MM) up to, not including, `until` (YYYY-MM). */
+export function monthEnds(from: string, until: string) {
+  const out: { month: string; end: string }[] = [];
+  for (let [y, m] = from.split("-").map(Number); `${y}-${String(m).padStart(2, "0")}` < until; m === 12 ? (y++, m = 1) : m++) {
+    out.push({ month: `${y}-${String(m).padStart(2, "0")}`, end: new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10) });
+  }
+  return out;
+}

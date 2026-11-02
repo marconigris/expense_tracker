@@ -18,7 +18,7 @@ test("a snapshot stays dated and is not silently rolled forward", () => {
   assert.equal(result.later, true);
   assert.equal(result.date, "2026-01-01");
 });
-import { groupAccounts, placeCustody, wealthGroup, wealthTotals } from "../lib/wealth-math";
+import { balanceAt, groupAccounts, monthEnds, placeCustody, wealthGroup, wealthTotals } from "../lib/wealth-math";
 
 test("EUR stays apart, other currencies go to USD, IBKR is stocks, and debts are subtracted", () => {
   const accounts = [
@@ -92,4 +92,22 @@ test("dad's bank money is placed in accounts; the rest stays unplaced", () => {
     ["EUR", ["Bunq Ahorro EUR"], 0],
     ["USD", ["Wise Savings USD"], 24496.67],
   ]);
+});
+
+test("month-end balances walk back from the latest balance by undoing later movements", () => {
+  const moves = [
+    { accountId: "a", date: "2026-10-05", amount: "500.00", status: "confirmed", batchId: "b" },
+    { accountId: "a", date: "2026-09-10", amount: "-200.00", status: "suggested", batchId: "b" },
+    { accountId: "a", date: "2026-10-20", amount: "999.00", status: "suggested", batchId: null },
+  ];
+  const anchor = { value: 1000, date: "2026-10-31" };
+  assert.deepEqual(balanceAt(anchor, moves, "2026-10-31"), { value: 1000, assumed: false });
+  assert.deepEqual(balanceAt(anchor, moves, "2026-09-30"), { value: 500, assumed: false });
+  assert.deepEqual(balanceAt(anchor, moves, "2026-08-31"), { value: 700, assumed: false });
+  assert.deepEqual(balanceAt(anchor, [], "2026-08-31"), { value: 1000, assumed: true });
+});
+
+test("month ends run up to the current month", () => {
+  assert.deepEqual(monthEnds("2026-01", "2026-03"), [{ month: "2026-01", end: "2026-01-31" }, { month: "2026-02", end: "2026-02-28" }]);
+  assert.deepEqual(monthEnds("2026-11", "2026-11"), []);
 });

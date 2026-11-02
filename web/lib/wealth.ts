@@ -1,8 +1,8 @@
 import { asc, eq } from "drizzle-orm";
 import { db, t } from "./db";
-import { custodyBalances, propertyYields } from "./reports";
+import { custodyBalances, custodyLedger, propertyYields, summarizeCustody } from "./reports";
 import { ensureRates, shiftDate, usdPerUnit } from "./fx";
-import { placeCustody, recordedBalance, wealthGroup, wealthTotals, type CustodyHolding, type WealthBucket } from "./wealth-math";
+import { balanceAt, monthEnds, placeCustody, recordedBalance, wealthGroup, wealthTotals, type CustodyHolding, type WealthBucket } from "./wealth-math";
 
 /**
  * Accounts show Marco's own money: dad's holdings recorded per account are taken out. The bubbles subtract the
@@ -62,4 +62,42 @@ export async function wealthHistory(totals: { usd: WealthBucket; eur: WealthBuck
   const history = await db.select().from(t.wealthSnapshots).orderBy(asc(t.wealthSnapshots.month));
   return history.map((r) => ({ month: r.month, currency: r.currency, cash: Number(r.cash), stocks: Number(r.stocks),
     properties: Number(r.properties), debt: Number(r.debt), total: Number(r.total) }));
+}
+
+type View = Awaited<ReturnType<typeof wealthView>>;
+export type WealthPointRow = { month: string; currency: string; cash: number; stocks: number; properties: number; debt: number; total: number };
+
+/**
+ * Month-end net worth since January, rebuilt from today's balances by undoing later movements. Dad's custody is
+ * taken at each month end. Accounts with no imported movements are assumed unchanged and listed in `assumed`.
+ */
+export async function wealthTimeline(view: View, from = "2026-01") {
+  const until = new Date().toISOString().slice(0, 7);
+  const months = monthEnds(from, until);
+  if (!months.length) return { points: [] as WealthPointRow[], assumed: [] as string[] };
+  const [movements, ledger] = await Promise.all([
+    db.select({ accountId: t.transactions.accountId, date: t.transactions.date, amount: t.transactions.amount,
+      status: t.transactions.status, batchId: t.transactions.importBatchId }).from(t.transactions),
+    custodyLedger(),
+  ]);
+  const accounts = [...view.items, ...view.otherAccounts].filter((a) => a.gross != null && a.date);
+  const currencies = [...new Set([...accounts.map((a) => a.currency), ...ledger.map((m) => m.currency)])].filter((c) => c !== "USD" && c !== "EUR");
+  await ensureRates(currencies, `${from}-01`, months.at(-1)!.end).catch(() => undefined);
+  const assumed = new Set<string>();
+  const points: WealthPointRow[] = [];
+  for (const { month, end } of months) {
+    const balances = accounts.map((a) => {
+      const b = balanceAt({ value: a.gross!, date: a.date! }, movements.filter((m) => m.accountId === a.id), end);
+      if (b.assumed && b.value) assumed.add(a.name);
+      return { currency: a.currency, value: b.value, group: wealthGroup(a), name: a.name };
+    });
+    const custody = summarizeCustody(ledger.filter((m) => m.date <= end));
+    const debts = custody.map((c) => ({ currency: c.currency, balance: c.balance, name: "Plata de papá" }));
+    const rates = Object.fromEntries(await Promise.all(currencies.map(async (c) => [c, await usdPerUnit(c, end)] as const)));
+    const totals = wealthTotals(balances, view.properties, rates, debts);
+    for (const [currency, b] of [["USD", totals.usd], ["EUR", totals.eur]] as const) {
+      if (b) points.push({ month, currency, cash: b.cash, stocks: b.stocks, properties: b.properties, debt: b.custody, total: b.total });
+    }
+  }
+  return { points, assumed: [...assumed].sort() };
 }

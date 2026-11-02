@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { requireOwner } from "@/lib/auth";
 import { formatMoney } from "@/lib/format";
-import { wealthHistory, wealthView } from "@/lib/wealth";
+import { wealthHistory, wealthTimeline, wealthView } from "@/lib/wealth";
 import { groupAccounts, type WealthBucket, type WealthLine } from "@/lib/wealth-math";
 import { WealthChart } from "./wealth-chart";
 
@@ -13,8 +13,12 @@ export default function PatrimonioPage() {
 async function Content() {
   await connection();
   await requireOwner();
-  const { items, otherAccounts, cash, placement, properties, totals, missing, rates } = await wealthView();
-  const history = await wealthHistory(totals);
+  const view = await wealthView();
+  const { items, otherAccounts, cash, placement, properties, totals, missing, rates } = view;
+  // Past months are rebuilt from movements; the current month is today's live figure.
+  const [saved, timeline] = await Promise.all([wealthHistory(totals), wealthTimeline(view)]);
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const history = [...timeline.points, ...saved.filter((h) => h.month === thisMonth)];
   return <div className="space-y-5">
     <div><h1 className="text-lg font-semibold">Patrimonio</h1><p className="text-sm text-muted">Solo tu plata: cuentas y tu parte de las propiedades</p></div>
     <div className={`grid gap-4 ${totals.eur ? "md:grid-cols-2" : ""}`}>
@@ -31,6 +35,7 @@ async function Content() {
         return points.length > 0 && <WealthChart key={currency} currency={currency} points={points} />;
       })}
     </div>
+    {timeline.assumed.length > 0 && <p className="-mt-2 text-xs text-muted">Meses anteriores reconstruidos desde los movimientos importados. Sin movimientos, se toman con el saldo de hoy: {timeline.assumed.join(" · ")}.</p>}
     <h2 className="pt-1 font-medium">Cuentas y fondos</h2>
     {groupAccounts(items).map((group) => <details key={group.region} className="group overflow-hidden rounded-xl border border-line bg-card">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 group-open:border-b group-open:border-line [&::-webkit-details-marker]:hidden">
