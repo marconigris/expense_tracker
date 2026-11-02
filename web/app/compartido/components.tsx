@@ -44,11 +44,18 @@ function Preview({ preview }: { preview: PreviewResult }) {
 
 export function CsvImport() {
   const [preview, action, pending] = useActionState(previewPartnerCsv, null);
+  const [fileName, setFileName] = useState("");
   return <div className="space-y-4"><div><h1 className="text-lg font-semibold">Importar CSV</h1><p className="text-sm text-muted">Pagaste vos</p></div>
     <form action={action} className="space-y-3 rounded-xl border border-line bg-card p-4">
       <label className="block text-sm"><span className="text-muted">Banco o tarjeta</span><input name="source" maxLength={100} required className={input} placeholder="Ej. Revolut" /></label>
       <label className="block text-sm"><span className="text-muted">Moneda si no figura en el archivo</span><select name="currency" defaultValue="BRL" className={input}><option value="BRL">BRL</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="ARS">ARS</option></select></label>
-      <label className="block text-sm"><span className="text-muted">Archivo CSV</span><input name="file" type="file" accept=".csv,text/csv" required className="mt-1 block w-full text-sm" /></label>
+      <div className="text-sm"><span className="text-muted">Archivo CSV</span>
+        <label className="relative mt-1 flex min-h-12 w-full cursor-pointer items-center justify-center rounded-lg border border-accent px-4 py-3 font-medium text-accent focus-within:ring-2 focus-within:ring-accent">
+          Elegir archivo CSV
+          <input name="file" type="file" required aria-label="Elegir archivo CSV" onChange={(event) => setFileName(event.target.files?.[0]?.name ?? "")} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+        </label>
+        <p className="mt-1 break-all text-xs text-muted" aria-live="polite">{fileName || "Ningún archivo seleccionado"}</p>
+      </div>
       <button disabled={pending} className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{pending ? "Leyendo…" : "Ver movimientos"}</button>
       <p className="text-xs text-muted">Los PDF se procesan con Codex desde la Mac.</p>
     </form>
