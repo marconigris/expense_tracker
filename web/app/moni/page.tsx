@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { connection } from "next/server";
 import { requireOwner } from "@/lib/auth";
 import { formatMoney } from "@/lib/format";
@@ -20,6 +21,7 @@ async function Content() {
       <p className="mt-2 text-xs opacity-80">Incluye solo movimientos cargados. Si faltan gastos pagados por Moni, el saldo cambiará.</p>
       <p className="mt-1 text-xs opacity-80">Cada moneda se mantiene separada. USDc y USDT se consideran equivalentes a USD.</p>
     </section>
+    {data.pendingSinceCutoff > 0 && <Link href="/revisar" className="block rounded-xl border border-warn/40 bg-card p-3 text-sm">Saldo parcial: hay {data.pendingSinceCutoff} movimientos desde octubre sin revisar que podrían modificarlo →</Link>}
     {data.needsReview > 0 && <p className="rounded-xl border border-warn/40 bg-card p-3 text-sm">Hay {data.needsReview} movimientos compartidos que necesitan aclaración y no se incluyeron en el balance.</p>}
     <section className="rounded-xl border border-line bg-card p-4 text-sm"><h2 className="mb-2 font-medium">Por espacio</h2>
       {data.entities.map((e) => <div key={e.id} className="flex flex-wrap justify-between gap-2 border-b border-line py-2 last:border-0"><span>{e.name}</span><span className="text-right tabular-nums">{e.balances.length ? e.balances.map((v) => <span key={v.currency} className="block">{balance(v.cents, v.currency)}</span>) : <span className="text-muted">Sin saldo pendiente</span>}</span></div>)}
