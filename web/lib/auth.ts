@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { auth, authDisabled } from "@/auth";
 import { db, t } from "./db";
 
@@ -19,6 +20,13 @@ export async function requireUser() {
 /** Marco only. Moni's shared-space views will use requireUser and filter by entity. */
 export async function requireOwner() {
   const user = await requireUser();
-  if (user.role !== "owner") throw new Error("Solo Marco puede ver esto por ahora");
+  if (user.role !== "owner") redirect("/compartido");
+  return user;
+}
+
+/** Partner-only entry points never accept the owner's identity. */
+export async function requirePartner() {
+  const user = await requireUser();
+  if (user.role !== "partner") throw new Error("Solo Moni puede cargar desde esta pantalla");
   return user;
 }

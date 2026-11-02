@@ -1,7 +1,8 @@
-import { requireOwner } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { formatMoney } from "@/lib/format";
 import { custodyBalances, monthlySummary, pendingCount, propertyYields, receivableBalances, type Currency } from "@/lib/reports";
 
@@ -17,7 +18,8 @@ const MONTH = new Intl.DateTimeFormat("es-AR", { month: "short", year: "2-digit"
 
 async function Dashboard({ searchParams }: Pick<PageProps<"/">, "searchParams">) {
   await connection();
-  await requireOwner();
+  const user = await requireUser();
+  if (user.role === "partner") redirect("/compartido");
   const currency: Currency = (await searchParams).moneda === "EUR" ? "EUR" : "USD";
   const [months, custody, pending, properties, receivables] = await Promise.all([
     monthlySummary(currency),

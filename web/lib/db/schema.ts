@@ -142,6 +142,24 @@ export const transactionAllocations = pgTable(
   (t) => [uniqueIndex("tx_allocation_owner_idx").on(t.transactionId, t.owner)],
 );
 
+// Partner-owned expense records are kept outside Marco's ledger when personal.
+// Shared entries also link to exactly one transaction in the joint ledger.
+export const partnerExpenses = pgTable("partner_expenses", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  transactionId: uuid("transaction_id").references(() => transactions.id, { onDelete: "cascade" }),
+  date: date("date").notNull(),
+  description: text("description").notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+  currency: text("currency").notNull(),
+  amountUsd: numeric("amount_usd", { precision: 14, scale: 2 }).notNull(),
+  amountEur: numeric("amount_eur", { precision: 14, scale: 2 }).notNull(),
+  area: text("area").notNull(),
+  source: text("source"),
+  dedupeKey: text("dedupe_key").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("partner_expense_key_idx").on(t.dedupeKey), uniqueIndex("partner_expense_transaction_idx").on(t.transactionId), index("partner_expense_user_date_idx").on(t.userId, t.date)]);
+
 // Learned from confirmations: "description contains X" -> entity/category.
 export const rules = pgTable("rules", {
   id: uuid("id").primaryKey().defaultRandom(),
