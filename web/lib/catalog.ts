@@ -71,7 +71,7 @@ export const ACCOUNTS: AccountSeed[] = [
   { slug: "cash-eur", name: "Efectivo EUR", institution: "Efectivo", currency: "EUR", kind: "cash", defaultEntity: "hogar-europa" },
   { slug: "binance", name: "Binance", institution: "Binance", currency: "USDT", kind: "crypto", defaultEntity: "inversiones" },
   { slug: "crypto-com", name: "Crypto.com", institution: "Crypto.com", currency: "USDT", kind: "crypto", defaultEntity: "inversiones" },
-  { slug: "ibkr", name: "IBKR", institution: "Interactive Brokers", currency: "USD", kind: "broker", defaultEntity: "inversiones" },
+  { slug: "ibkr", name: "IBKR", institution: "Interactive Brokers", currency: "EUR", kind: "broker", defaultEntity: "inversiones" },
   // Moved to ARQ in 2026; kept for history only.
   { slug: "usdt", name: "USDT", institution: "Crypto", currency: "USDT", kind: "crypto", defaultEntity: "personal", active: false },
 ];
