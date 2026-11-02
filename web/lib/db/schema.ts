@@ -184,6 +184,7 @@ export const wealthSnapshots = pgTable("wealth_snapshots", {
   currency: text("currency").notNull(),
   cash: numeric("cash", { precision: 14, scale: 2 }).notNull(),
   stocks: numeric("stocks", { precision: 14, scale: 2 }).notNull(),
+  loans: numeric("loans", { precision: 14, scale: 2 }).notNull().default("0"),
   properties: numeric("properties", { precision: 14, scale: 2 }).notNull(),
   debt: numeric("debt", { precision: 14, scale: 2 }).notNull(),
   total: numeric("total", { precision: 14, scale: 2 }).notNull(),

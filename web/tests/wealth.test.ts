@@ -116,3 +116,10 @@ test("collecting a settlement does not lower earlier months", () => {
   const moves = [{ accountId: "a", date: "2026-08-19", amount: "52012.00", status: "confirmed", batchId: "b", kind: "settlement" }];
   assert.deepEqual(balanceAt({ value: 77250, date: "2026-11-02" }, moves, "2026-07-31"), { value: 77250, assumed: false });
 });
+
+test("loans owed to Marco add to net worth in their currency", () => {
+  const result = wealthTotals([{ currency: "EUR", value: 1000, group: "cash" }], [], {}, [], [{ currency: "EUR", value: 35218, name: "Bora Vida" }]);
+  assert.equal(result.eur?.loans, 35218);
+  assert.equal(result.eur?.total, 36218);
+  assert.deepEqual(result.eur?.lines.loans, [{ name: "Bora Vida", amount: 35218 }]);
+});

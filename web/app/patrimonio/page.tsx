@@ -77,6 +77,7 @@ async function Content() {
 const GROUPS = [
   { key: "cash", label: "Banco / Cash", tag: "Líquido", hint: "Bancos, money market, Cocos", tone: "bg-white" },
   { key: "stocks", label: "Stocks / Fondos / Crypto", tag: "Inversión", hint: "IBKR, Binance, Crypto.com", tone: "bg-white/55" },
+  { key: "loans", label: "Préstamos a cobrar", tag: "Ilíquido", hint: "Bora Vida; se cobra cuando la empresa pague", tone: "bg-white/40" },
   { key: "properties", label: "Propiedades", tag: "Ilíquido", hint: "Tu parte del capital aportado", tone: "bg-white/25" },
 ] as const;
 
@@ -106,7 +107,7 @@ function Line({ label, tag, hint, tone, amount, currency, lines, negative = fals
 
 function Bubble({ currency, bucket }: { currency: string; bucket: WealthBucket }) {
   // USD always shows the three groups so an empty one (e.g. IBKR without a balance) is visible.
-  const groups = GROUPS.filter((g) => currency === "USD" || bucket[g.key] !== 0);
+  const groups = GROUPS.filter((g) => (currency === "USD" && g.key !== "loans") || bucket[g.key] !== 0);
   const positive = groups.reduce((sum, g) => sum + Math.max(0, bucket[g.key]), 0);
   return <section className="hero rounded-2xl p-5">
     <p className="text-sm opacity-80">Patrimonio en {currency}</p>

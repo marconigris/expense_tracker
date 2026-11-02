@@ -16,10 +16,10 @@ export function recordedBalance(movements: Movement[], snapshots: Snapshot[]) {
 
 export type WealthGroup = "cash" | "stocks";
 type Money = { currency: string; value: number | null; group: WealthGroup; name?: string };
-type Field = WealthGroup | "properties" | "custody";
+type Field = WealthGroup | "loans" | "properties" | "custody";
 /** One contribution to a bubble line, in the bucket's currency; `original` is set when it was converted. */
 export type WealthLine = { name: string; amount: number; original?: { amount: number; currency: string } };
-export type WealthBucket = { cash: number; stocks: number; properties: number; custody: number; total: number;
+export type WealthBucket = { cash: number; stocks: number; loans: number; properties: number; custody: number; total: number;
   converted: { currency: string; amount: number }[]; lines: Record<Field, WealthLine[]> };
 
 /** IBKR and crypto wallets are investments; banks, money market and Cocos can be withdrawn quickly. */
@@ -33,8 +33,8 @@ export function wealthGroup(account: { slug: string; kind?: string }): WealthGro
  * placed in an account) are subtracted.
  */
 export function wealthTotals(accounts: Money[], properties: { stake: number; stakeCurrency: string; name?: string }[], usdPerUnit: Record<string, number | null>,
-  debts: { currency: string; balance: number; name: string }[] = []) {
-  const bucket = (): WealthBucket => ({ cash: 0, stocks: 0, properties: 0, custody: 0, total: 0, converted: [], lines: { cash: [], stocks: [], properties: [], custody: [] } });
+  debts: { currency: string; balance: number; name: string }[] = [], loans: { currency: string; value: number; name: string }[] = []) {
+  const bucket = (): WealthBucket => ({ cash: 0, stocks: 0, loans: 0, properties: 0, custody: 0, total: 0, converted: [], lines: { cash: [], stocks: [], loans: [], properties: [], custody: [] } });
   const usd = bucket();
   const eur = bucket();
   const missingRates = new Set<string>();
@@ -46,7 +46,7 @@ export function wealthTotals(accounts: Money[], properties: { stake: number; sta
     if (rate == null) { missingRates.add(currency); return; }
     usd[field] += amount * rate;
     usd.lines[field].push(currency === "USD" ? { name, amount } : { name, amount: amount * rate, original: { amount, currency } });
-    if (currency !== "USD" && field !== "properties" && field !== "custody") {
+    if (currency !== "USD" && (field === "cash" || field === "stocks")) {
       const item = usd.converted.find((c) => c.currency === currency);
       if (item) item.amount += amount; else usd.converted.push({ currency, amount });
     }
@@ -54,8 +54,9 @@ export function wealthTotals(accounts: Money[], properties: { stake: number; sta
   for (const a of accounts) if (a.value != null) add(a.currency, a.value, a.group, a.name);
   for (const p of properties) add(p.stakeCurrency, p.stake, "properties", p.name);
   for (const d of debts) add(d.currency, d.balance, "custody", d.name);
+  for (const l of loans) add(l.currency, l.value, "loans", l.name);
   for (const b of [usd, eur]) for (const lines of Object.values(b.lines)) lines.sort((x, y) => y.amount - x.amount);
-  for (const b of [usd, eur]) b.total = b.cash + b.stocks + b.properties - b.custody;
+  for (const b of [usd, eur]) b.total = b.cash + b.stocks + b.loans + b.properties - b.custody;
   return { usd, eur: hasEur ? eur : null, missingRates: [...missingRates] };
 }
 

@@ -15,9 +15,14 @@ export async function wealthView() {
     db.select({ accountId: t.transactions.accountId, date: t.transactions.date, amount: t.transactions.amount,
       kind: t.transactions.kind, status: t.transactions.status, batchId: t.transactions.importBatchId }).from(t.transactions),
     custodyBalances(), propertyYields(),
-    db.select({ id: t.entities.id }).from(t.entities).where(eq(t.entities.kind, "custody")),
+    db.select({ id: t.entities.id, kind: t.entities.kind, name: t.entities.name }).from(t.entities),
   ]);
-  const custodyIds = new Set(custodyEntities.map((e) => e.id));
+  const custodyIds = new Set(custodyEntities.filter((e) => e.kind === "custody").map((e) => e.id));
+  // Money a business owes Marco: latest valuation of that business with no account.
+  const loans = custodyEntities.filter((e) => e.kind === "business").flatMap((e) => {
+    const latest = valuations.filter((v) => v.entityId === e.id && !v.accountId).sort((a, b) => b.date.localeCompare(a.date))[0];
+    return latest && Number(latest.value) ? [{ name: e.name, currency: latest.currency, value: Number(latest.value), date: latest.date }] : [];
+  });
   const latestHolding = new Map<string, (typeof valuations)[number]>();
   for (const v of valuations) {
     if (!v.accountId || !v.entityId || !custodyIds.has(v.entityId)) continue;
@@ -44,9 +49,9 @@ export async function wealthView() {
   // Fresh rates are best effort: without network the latest stored rate is used.
   await ensureRates(foreign, shiftDate(today, -7), today).catch(() => undefined);
   const rates = Object.fromEntries(await Promise.all(foreign.map(async (c) => [c, await usdPerUnit(c, today)] as const)));
-  const totals = wealthTotals(items.map((a) => ({ currency: a.currency, value: a.value, group: wealthGroup(a), name: a.name })), properties, rates, debts);
+  const totals = wealthTotals(items.map((a) => ({ currency: a.currency, value: a.value, group: wealthGroup(a), name: a.name })), properties, rates, debts, loans);
   const missing = items.filter((a) => a.value == null);
-  return { items: withData, otherAccounts: items.filter((a) => !withData.includes(a)), cash, placement, properties, totals, missing, rates };
+  return { items: withData, otherAccounts: items.filter((a) => !withData.includes(a)), cash, placement, properties, loans, totals, missing, rates };
 }
 
 /** Saves this month's totals (overwriting earlier saves this month) and returns every month recorded. */
@@ -54,18 +59,18 @@ export async function wealthHistory(totals: { usd: WealthBucket; eur: WealthBuck
   const month = new Date().toISOString().slice(0, 7);
   const buckets: [string, WealthBucket][] = [["USD", totals.usd]];
   if (totals.eur) buckets.push(["EUR", totals.eur]);
-  const rows = buckets.map(([currency, b]) => ({ month, currency, cash: b.cash.toFixed(2), stocks: b.stocks.toFixed(2), properties: b.properties.toFixed(2),
+  const rows = buckets.map(([currency, b]) => ({ month, currency, cash: b.cash.toFixed(2), stocks: b.stocks.toFixed(2), loans: b.loans.toFixed(2), properties: b.properties.toFixed(2),
       debt: b.custody.toFixed(2), total: b.total.toFixed(2), updatedAt: new Date() }));
   for (const row of rows) {
     await db.insert(t.wealthSnapshots).values(row).onConflictDoUpdate({ target: [t.wealthSnapshots.month, t.wealthSnapshots.currency], set: row });
   }
   const history = await db.select().from(t.wealthSnapshots).orderBy(asc(t.wealthSnapshots.month));
-  return history.map((r) => ({ month: r.month, currency: r.currency, cash: Number(r.cash), stocks: Number(r.stocks),
+  return history.map((r) => ({ month: r.month, currency: r.currency, cash: Number(r.cash), stocks: Number(r.stocks), loans: Number(r.loans),
     properties: Number(r.properties), debt: Number(r.debt), total: Number(r.total) }));
 }
 
 type View = Awaited<ReturnType<typeof wealthView>>;
-export type WealthPointRow = { month: string; currency: string; cash: number; stocks: number; properties: number; debt: number; total: number };
+export type WealthPointRow = { month: string; currency: string; cash: number; stocks: number; loans: number; properties: number; debt: number; total: number };
 
 /**
  * Month-end net worth since January, rebuilt from today's balances by undoing later movements. Dad's custody is
@@ -94,9 +99,10 @@ export async function wealthTimeline(view: View, from = "2026-01") {
     const custody = summarizeCustody(ledger.filter((m) => m.date <= end));
     const debts = custody.map((c) => ({ currency: c.currency, balance: c.balance, name: "Plata de papá" }));
     const rates = Object.fromEntries(await Promise.all(currencies.map(async (c) => [c, await usdPerUnit(c, end)] as const)));
-    const totals = wealthTotals(balances, view.properties, rates, debts);
+    // Loans are taken as owed all year, like accounts without movements.
+    const totals = wealthTotals(balances, view.properties, rates, debts, view.loans);
     for (const [currency, b] of [["USD", totals.usd], ["EUR", totals.eur]] as const) {
-      if (b) points.push({ month, currency, cash: b.cash, stocks: b.stocks, properties: b.properties, debt: b.custody, total: b.total });
+      if (b) points.push({ month, currency, cash: b.cash, stocks: b.stocks, loans: b.loans, properties: b.properties, debt: b.custody, total: b.total });
     }
   }
   return { points, assumed: [...assumed].sort() };

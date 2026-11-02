@@ -1,0 +1,1 @@
+ALTER TABLE "wealth_snapshots" ADD COLUMN "loans" numeric(14, 2) DEFAULT '0' NOT NULL;

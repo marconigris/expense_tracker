@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatMoney } from "@/lib/format";
 
-export type WealthPoint = { month: string; cash: number; stocks: number; properties: number; debt: number; total: number };
+export type WealthPoint = { month: string; cash: number; stocks: number; loans: number; properties: number; debt: number; total: number };
 
 const H = 180;
 const PAD = { top: 12, right: 12, bottom: 24, left: 48 };
@@ -79,7 +79,7 @@ export function WealthChart({ currency, points }: { currency: string; points: We
       {shown && <circle cx={x(active)} cy={y(shown.total)} r={5} fill="var(--chart)" stroke="var(--card)" strokeWidth={2} />}
     </svg></div>
     {shown && <dl className="mt-2 grid gap-x-6 gap-y-0.5 text-xs text-muted sm:grid-cols-2">
-      {([["Banco / Cash", shown.cash], ["Stocks / Fondos / Crypto", shown.stocks], ["Propiedades", shown.properties], ["Le debés a papá", -shown.debt]] as const)
+      {([["Banco / Cash", shown.cash], ["Stocks / Fondos / Crypto", shown.stocks], ["Préstamos a cobrar", shown.loans], ["Propiedades", shown.properties], ["Le debés a papá", -shown.debt]] as const)
         .map(([label, v]) => <div key={label} className="flex justify-between gap-2"><dt>{label}</dt><dd className="tabular-nums text-fg">{formatMoney(v, currency)}</dd></div>)}
     </dl>}
     
