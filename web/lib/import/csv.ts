@@ -23,6 +23,7 @@ const COLUMNS = {
   product: ["product"],
   reference: ["reference", "transaction id", "transferwise id", "external id"],
   state: ["state", "estado"],
+  counterpartyName: ["name"],
 };
 
 function findColumn(headers: string[], names: string[]) {
@@ -72,7 +73,8 @@ export function parseCsv(text: string): { rows: ParsedRow[]; format: string; err
   const col = Object.fromEntries(
     Object.entries(COLUMNS).map(([k, names]) => [k, findColumn(headers, names)]),
   ) as Record<keyof typeof COLUMNS, number>;
-  const format = col.product >= 0 && col.state >= 0 ? "revolut" : headers.some((h) => norm(h) === "transferwise id") ? "wise" : "csv";
+  const isBunq = headers.some((h) => norm(h) === "interest date") && headers.some((h) => norm(h) === "counterparty");
+  const format = isBunq ? "bunq" : col.product >= 0 && col.state >= 0 ? "revolut" : headers.some((h) => norm(h) === "transferwise id") ? "wise" : "csv";
 
   const rows: ParsedRow[] = [];
   const errors: string[] = [];
@@ -91,9 +93,11 @@ export function parseCsv(text: string): { rows: ParsedRow[]; format: string; err
       continue;
     }
     const fee = col.fee >= 0 ? (parseAmount(r[col.fee]) ?? 0) : 0;
+    const description = (r[col.description] ?? "").trim();
+    const counterparty = isBunq ? (r[col.counterpartyName] ?? "").trim() : "";
     rows.push({
       date,
-      description: (r[col.description] ?? "").trim(),
+      description: [counterparty, description].filter(Boolean).join(" — "),
       amount: amount - Math.abs(fee),
       currency: col.currency >= 0 ? r[col.currency]?.trim().toUpperCase() || undefined : undefined,
       product: col.product >= 0 ? r[col.product]?.trim() : undefined,
