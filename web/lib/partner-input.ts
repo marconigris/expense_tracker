@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 export const PARTNER_CURRENCIES = ["EUR", "USD", "ARS", "BRL"] as const;
-export const PARTNER_AREAS = { brasil: "hogar-brasil", cabarete: "hogar-cabarete", europa: "hogar-europa", personal: null, negocio: null } as const;
+export const PARTNER_AREAS = { brasil: "hogar-brasil", cabarete: "hogar-cabarete", europa: "hogar-europa", personal: null } as const;
 export type PartnerArea = keyof typeof PARTNER_AREAS;
 export type PartnerCurrency = (typeof PARTNER_CURRENCIES)[number];
 export type PartnerExpense = { date: string; description: string; amount: number; currency: PartnerCurrency; reference?: string; occurrence: number };

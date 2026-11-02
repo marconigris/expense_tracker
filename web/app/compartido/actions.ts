@@ -11,7 +11,7 @@ import { parsePartnerRevolut } from "@/lib/import/partner-revolut";
 import { isPartnerExpenseSpace, PARTNER_AREAS, partnerArea, partnerCsvKey, partnerSplit, validatePartnerExpense, type PartnerExpense } from "@/lib/partner-input";
 
 export type PartnerResult = { ok: boolean; message: string; requestId?: string };
-export type PreviewResult = { ok: boolean; message: string; source?: string; rows?: PartnerExpense[]; skipped?: number };
+export type PreviewResult = { ok: boolean; message: string; source?: string; rows?: (PartnerExpense & { suggestedArea?: string })[]; skipped?: number };
 
 function safeMessage(error: unknown, fallback: string) {
   return error instanceof Error && /^(Revisá|Elegí|Indicá|Ingresá|Volvé|Falta la cotización|El archivo)/.test(error.message) ? error.message : fallback;
@@ -90,7 +90,7 @@ export async function addManualExpense(_previous: PartnerResult | null, form: Fo
 }
 
 export async function previewPartnerCsv(_previous: PreviewResult | null, form: FormData): Promise<PreviewResult> {
-  await requirePartner();
+  const user = await requirePartner();
   const file = form.get("file");
   const source = String(form.get("source") ?? "").trim();
   const fallbackCurrency = String(form.get("currency") ?? "").toUpperCase();
@@ -114,7 +114,19 @@ export async function previewPartnerCsv(_previous: PreviewResult | null, form: F
     } catch { skipped++; }
   }
   if (!rows.length) return { ok: false, message: parsed.errors[0] ?? "No encontré gastos compatibles en el archivo." };
-  return { ok: true, message: "Elegí solo los gastos compartidos que quieras cargar.", source, rows, skipped };
+  const previous = await db.select({ description: t.partnerExpenses.description, area: t.partnerExpenses.area }).from(t.partnerExpenses)
+    .where(eq(t.partnerExpenses.userId, user.id));
+  const areas = new Map<string, Set<string>>();
+  for (const item of previous) {
+    if (!Object.hasOwn(PARTNER_AREAS, item.area)) continue;
+    const key = item.description.trim().toLocaleLowerCase("es");
+    const known = areas.get(key) ?? new Set<string>();
+    known.add(item.area); areas.set(key, known);
+  }
+  return { ok: true, message: "Elegí los gastos que quieras cargar.", source, rows: rows.map((row) => {
+    const known = areas.get(row.description.trim().toLocaleLowerCase("es"));
+    return known?.size === 1 ? { ...row, suggestedArea: [...known][0] } : row;
+  }), skipped };
 }
 
 export async function importPartnerCsv(_previous: PartnerResult | null, form: FormData): Promise<PartnerResult> {
