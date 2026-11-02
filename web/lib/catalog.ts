@@ -56,6 +56,8 @@ export const ACCOUNTS: AccountSeed[] = [
   { slug: "arq-ahorro-usdc", name: "ARQ Ahorro USDc", institution: "ARQ", currency: "USDC", kind: "savings", defaultEntity: "inversiones", hint: "Cuenta remunerada de ARQ; recibe y devuelve fondos de ARQ USDc." },
   { slug: "cocos-usd", name: "Cocos USD", institution: "Cocos", currency: "USD", kind: "broker", defaultEntity: "inversiones", hint: "Inversión. A veces se pagan cosas del coaching o de la vida en Brasil." },
   { slug: "cocos-ars", name: "Cocos ARS", institution: "Cocos", currency: "ARS", kind: "broker", defaultEntity: "inversiones", hint: "Inversión. A veces se pagan cosas del coaching o de la vida en Brasil." },
+  { slug: "cocos-fci-dolares-plus", name: "Cocos Dólares Plus", institution: "Cocos", currency: "USD", kind: "savings", defaultEntity: "inversiones", hint: "Fondo común en dólares; las suscripciones y rescates son movimientos de capital." },
+  { slug: "cocos-fci-ahorro-dolares", name: "Cocos Ahorro Dólares", institution: "Cocos", currency: "USD", kind: "savings", defaultEntity: "inversiones", hint: "Fondo común en dólares; separar capital rescatado del rendimiento realizado." },
   { slug: "wise-usd", name: "Wise Main USD", institution: "Wise", currency: "USD", kind: "bank", defaultEntity: "inversiones", hint: "Cuenta con fondos de más de una persona: revisar la titularidad de los movimientos y rendimientos." },
   { slug: "wise-ahorro-usd", name: "Wise Savings USD", institution: "Wise", currency: "USD", kind: "savings", defaultEntity: "inversiones", hint: "Fondo de ahorro; revisar titularidad, rendimientos y comisiones." },
   { slug: "wise-eur", name: "Wise EUR", institution: "Wise", currency: "EUR", kind: "savings", defaultEntity: "inversiones" },
