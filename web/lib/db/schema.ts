@@ -209,6 +209,7 @@ export const valuations = pgTable("valuations", {
   accountId: uuid("account_id").references(() => accounts.id),
   date: date("date").notNull(),
   // Value of the whole asset; Marco's part is value * entity.marcoShare.
+  // With both account and a custody entity: how much of that account's balance belongs to that person.
   value: numeric("value", { precision: 14, scale: 2 }).notNull(),
   currency: text("currency").notNull(),
   notes: text("notes"),

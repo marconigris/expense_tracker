@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, t } from "../db";
 import type { NewTransaction } from "../db/schema";
 import type { ImportResult } from "./pipeline";
@@ -73,7 +73,7 @@ export async function importRevolutTax(report: TaxReport, filename: string, sele
       if (group.closing === undefined) continue;
       const account = bySlug.get(group.slug)!;
       const prior = await tx.select({ id: t.valuations.id, value: t.valuations.value }).from(t.valuations)
-        .where(and(eq(t.valuations.accountId, account.id), eq(t.valuations.date, latestDate), eq(t.valuations.currency, group.currency)));
+        .where(and(eq(t.valuations.accountId, account.id), isNull(t.valuations.entityId), eq(t.valuations.date, latestDate), eq(t.valuations.currency, group.currency)));
       if (prior.length && Number(prior[0].value) !== group.closing) throw new Error(`Ya existe otro saldo para ${account.name}`);
       if (!prior.length) await tx.insert(t.valuations).values({ accountId: account.id, date: latestDate, currency: group.currency,
         value: group.closing.toFixed(2), notes: "Saldo de cierre del informe consolidado de Revolut. Verificar titularidad y movimientos posteriores." });

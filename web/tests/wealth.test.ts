@@ -18,9 +18,9 @@ test("a snapshot stays dated and is not silently rolled forward", () => {
   assert.equal(result.later, true);
   assert.equal(result.date, "2026-01-01");
 });
-import { groupAccounts, wealthGroup, wealthTotals } from "../lib/wealth-math";
+import { groupAccounts, placeCustody, wealthGroup, wealthTotals } from "../lib/wealth-math";
 
-test("EUR stays apart, other currencies go to USD, IBKR is stocks, and dad's custody is subtracted", () => {
+test("EUR stays apart, other currencies go to USD, IBKR is stocks, and debts are subtracted", () => {
   const accounts = [
     { currency: "USD", value: 1000, group: "cash" as const }, { currency: "USDC", value: 500, group: "cash" as const },
     { currency: "ARS", value: 150000, group: "cash" as const }, { currency: "USD", value: 4000, group: "stocks" as const },
@@ -28,7 +28,7 @@ test("EUR stays apart, other currencies go to USD, IBKR is stocks, and dad's cus
     { currency: "USD", value: null, group: "cash" as const },
   ];
   const result = wealthTotals(accounts, [{ stake: 60000, stakeCurrency: "USD" }], { USDC: 1, ARS: 0.001 },
-    [{ currency: "USD", balance: 300 }, { currency: "USD", balance: 200 }, { currency: "EUR", balance: 500 }]);
+    [{ currency: "USD", balance: 300, name: "a" }, { currency: "USD", balance: 200, name: "b" }, { currency: "EUR", balance: 500, name: "c" }]);
   assert.equal(result.usd.cash, 1650);
   assert.equal(result.usd.stocks, 4000);
   assert.equal(result.usd.custody, 500);
@@ -71,4 +71,24 @@ test("dad's money is cash when it came as cash or passed through a cash account"
   assert.equal(custodyForm(null, "Saldo inicial papá: banco USD"), "bank");
   assert.equal(custodyForm("cash", "Pago intereses"), "cash");
   assert.equal(custodyForm("bank", "Card transaction efectivo"), "bank");
+});
+
+test("each bubble line lists where its money comes from, largest first", () => {
+  const result = wealthTotals([
+    { currency: "EUR", value: 100, group: "cash", name: "Revolut EUR" }, { currency: "EUR", value: 900, group: "cash", name: "Bunq EUR" },
+    { currency: "ARS", value: 1000, group: "cash", name: "Brubank ARS" },
+  ], [{ stake: 50, stakeCurrency: "USD", name: "La Mariposa" }], { ARS: 0.001 }, [{ currency: "USD", balance: 30, name: "Efectivo que le debés a papá" }]);
+  assert.deepEqual(result.eur?.lines.cash, [{ name: "Bunq EUR", amount: 900 }, { name: "Revolut EUR", amount: 100 }]);
+  assert.deepEqual(result.usd.lines.cash, [{ name: "Brubank ARS", amount: 1, original: { amount: 1000, currency: "ARS" } }]);
+  assert.deepEqual(result.usd.lines.properties, [{ name: "La Mariposa", amount: 50 }]);
+  assert.deepEqual(result.usd.lines.custody, [{ name: "Efectivo que le debés a papá", amount: 30 }]);
+});
+
+test("dad's bank money is placed in accounts; the rest stays unplaced", () => {
+  const result = placeCustody([{ currency: "EUR", balance: 25314.21 }, { currency: "USD", balance: 47496.67 }],
+    [{ accountId: "bunq", name: "Bunq Ahorro EUR", currency: "EUR", value: 25314.21 }, { accountId: "ws", name: "Wise Savings USD", currency: "USD", value: 23000 }]);
+  assert.deepEqual(result.map((r) => [r.currency, r.held.map((h) => h.name), r.unplaced]), [
+    ["EUR", ["Bunq Ahorro EUR"], 0],
+    ["USD", ["Wise Savings USD"], 24496.67],
+  ]);
 });

@@ -15,8 +15,12 @@ export function recordedBalance(movements: Movement[], snapshots: Snapshot[]) {
 }
 
 export type WealthGroup = "cash" | "stocks";
-type Money = { currency: string; value: number | null; group: WealthGroup };
-export type WealthBucket = { cash: number; stocks: number; properties: number; custody: number; total: number; converted: { currency: string; amount: number }[] };
+type Money = { currency: string; value: number | null; group: WealthGroup; name?: string };
+type Field = WealthGroup | "properties" | "custody";
+/** One contribution to a bubble line, in the bucket's currency; `original` is set when it was converted. */
+export type WealthLine = { name: string; amount: number; original?: { amount: number; currency: string } };
+export type WealthBucket = { cash: number; stocks: number; properties: number; custody: number; total: number;
+  converted: { currency: string; amount: number }[]; lines: Record<Field, WealthLine[]> };
 
 /** Only IBKR holds stocks and funds; banks, money market, Cocos and crypto can be withdrawn quickly. */
 export function wealthGroup(account: { slug: string }): WealthGroup {
@@ -25,28 +29,32 @@ export function wealthGroup(account: { slug: string }): WealthGroup {
 
 /**
  * Marco's wealth in two buckets that are never mixed: EUR stays in EUR, every other currency is converted to USD
- * with `usdPerUnit`. Account balances are gross; dad's custody sits in Marco's accounts and is subtracted.
+ * with `usdPerUnit`. Accounts carry only Marco's own money; `debts` (cash owed to dad, dad's money not yet
+ * placed in an account) are subtracted.
  */
-export function wealthTotals(accounts: Money[], properties: { stake: number; stakeCurrency: string }[], usdPerUnit: Record<string, number | null>,
-  custody: { currency: string; balance: number }[] = []) {
-  const usd: WealthBucket = { cash: 0, stocks: 0, properties: 0, custody: 0, total: 0, converted: [] };
-  const eur: WealthBucket = { cash: 0, stocks: 0, properties: 0, custody: 0, total: 0, converted: [] };
+export function wealthTotals(accounts: Money[], properties: { stake: number; stakeCurrency: string; name?: string }[], usdPerUnit: Record<string, number | null>,
+  debts: { currency: string; balance: number; name: string }[] = []) {
+  const bucket = (): WealthBucket => ({ cash: 0, stocks: 0, properties: 0, custody: 0, total: 0, converted: [], lines: { cash: [], stocks: [], properties: [], custody: [] } });
+  const usd = bucket();
+  const eur = bucket();
   const missingRates = new Set<string>();
   let hasEur = false;
-  const add = (currency: string, amount: number, field: WealthGroup | "properties" | "custody") => {
+  const add = (currency: string, amount: number, field: Field, name = currency) => {
     if (!amount) return;
-    if (currency === "EUR") { hasEur = true; eur[field] += amount; return; }
+    if (currency === "EUR") { hasEur = true; eur[field] += amount; eur.lines[field].push({ name, amount }); return; }
     const rate = currency === "USD" ? 1 : usdPerUnit[currency];
     if (rate == null) { missingRates.add(currency); return; }
     usd[field] += amount * rate;
+    usd.lines[field].push(currency === "USD" ? { name, amount } : { name, amount: amount * rate, original: { amount, currency } });
     if (currency !== "USD" && field !== "properties" && field !== "custody") {
       const item = usd.converted.find((c) => c.currency === currency);
       if (item) item.amount += amount; else usd.converted.push({ currency, amount });
     }
   };
-  for (const a of accounts) if (a.value != null) add(a.currency, a.value, a.group);
-  for (const p of properties) add(p.stakeCurrency, p.stake, "properties");
-  for (const c of custody) add(c.currency, c.balance, "custody");
+  for (const a of accounts) if (a.value != null) add(a.currency, a.value, a.group, a.name);
+  for (const p of properties) add(p.stakeCurrency, p.stake, "properties", p.name);
+  for (const d of debts) add(d.currency, d.balance, "custody", d.name);
+  for (const b of [usd, eur]) for (const lines of Object.values(b.lines)) lines.sort((x, y) => y.amount - x.amount);
   for (const b of [usd, eur]) b.total = b.cash + b.stocks + b.properties - b.custody;
   return { usd, eur: hasEur ? eur : null, missingRates: [...missingRates] };
 }
@@ -74,5 +82,21 @@ export function groupAccounts<T extends { institution: string; name: string; cur
     const inRegion = accounts.filter((a) => regionOf(a) === region);
     const banks = [...new Set(inRegion.map((a) => a.institution))].sort(byName);
     return { region, banks: banks.map((bank) => ({ bank, accounts: inRegion.filter((a) => a.institution === bank).sort((a, b) => byName(a.name, b.name)) })) };
+  });
+}
+
+export type CustodyHolding = { accountId: string; name: string; currency: string; value: number };
+
+/**
+ * Dad's bank money by currency, placed in the accounts that hold it. What is not placed in any account
+ * is `unplaced` and still has to be taken out of Marco's side so it never counts as his.
+ */
+export function placeCustody(bank: { currency: string; balance: number }[], holdings: CustodyHolding[]) {
+  const currencies = [...new Set([...bank.map((b) => b.currency), ...holdings.map((h) => h.currency)])];
+  return currencies.map((currency) => {
+    const total = bank.filter((b) => b.currency === currency).reduce((sum, b) => sum + b.balance, 0);
+    const held = holdings.filter((h) => h.currency === currency).sort((a, b) => b.value - a.value);
+    const placed = held.reduce((sum, h) => sum + h.value, 0);
+    return { currency, total, held, unplaced: Math.round((total - placed) * 100) / 100 };
   });
 }
