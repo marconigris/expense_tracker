@@ -17,7 +17,8 @@ async function Content() {
     <div><h1 className="text-lg font-semibold">Balance con Moni</h1><p className="text-sm text-muted">Desde el 01/10/2026 · saldo inicial cero</p></div>
     <section className="hero rounded-2xl p-5"><p className="text-sm opacity-80">Balance por moneda</p>
       {data.totals.length ? data.totals.map((v) => <p key={v.currency} className="mt-2 text-xl font-semibold tabular-nums">{balance(v.cents, v.currency)}</p>) : <p className="mt-2 text-xl font-semibold">Están a mano</p>}
-      <p className="mt-2 text-xs opacity-80">Cada moneda se mantiene separada. USDc y USDT se consideran equivalentes a USD.</p>
+      <p className="mt-2 text-xs opacity-80">Incluye solo movimientos cargados. Si faltan gastos pagados por Moni, el saldo cambiará.</p>
+      <p className="mt-1 text-xs opacity-80">Cada moneda se mantiene separada. USDc y USDT se consideran equivalentes a USD.</p>
     </section>
     {data.needsReview > 0 && <p className="rounded-xl border border-warn/40 bg-card p-3 text-sm">Hay {data.needsReview} movimientos compartidos que necesitan aclaración y no se incluyeron en el balance.</p>}
     <section className="rounded-xl border border-line bg-card p-4 text-sm"><h2 className="mb-2 font-medium">Por espacio</h2>
