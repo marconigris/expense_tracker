@@ -17,3 +17,24 @@ test("a snapshot stays dated and is not silently rolled forward", () => {
   assert.equal(result.later, true);
   assert.equal(result.date, "2026-01-01");
 });
+import { wealthTotals } from "../lib/wealth-math";
+
+test("EUR stays apart; every other currency is converted to USD; custody is subtracted", () => {
+  const accounts = [
+    { currency: "USD", value: 1000 }, { currency: "USDC", value: 500 }, { currency: "ARS", value: 150000 },
+    { currency: "EUR", value: 2000 }, { currency: "ZAR", value: 0 }, { currency: "USD", value: null },
+  ];
+  const result = wealthTotals(accounts, [{ currency: "USD", balance: 300 }, { currency: "EUR", balance: 500 }],
+    [{ stake: 60000, stakeCurrency: "USD" }], { USDC: 1, ARS: 0.001 });
+  assert.equal(result.usd.accounts, 1650);
+  assert.equal(result.usd.total, 1650 + 60000 - 300);
+  assert.deepEqual(result.usd.converted, [{ currency: "USDC", amount: 500 }, { currency: "ARS", amount: 150000 }]);
+  assert.equal(result.eur?.total, 1500);
+  assert.deepEqual(result.missingRates, []);
+});
+
+test("no EUR bucket without EUR money, and missing rates are reported", () => {
+  const result = wealthTotals([{ currency: "BRL", value: 100 }], [], [], { BRL: null });
+  assert.equal(result.eur, null);
+  assert.deepEqual(result.missingRates, ["BRL"]);
+});

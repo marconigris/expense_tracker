@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { requireOwner } from "@/lib/auth";
 import { formatMoney } from "@/lib/format";
 import { wealthView } from "@/lib/wealth";
+import type { WealthBucket } from "@/lib/wealth-math";
 
 export default function PatrimonioPage() {
   return <Suspense fallback={<p className="text-muted">Cargando patrimonio…</p>}><Content /></Suspense>;
@@ -11,13 +12,17 @@ export default function PatrimonioPage() {
 async function Content() {
   await connection();
   await requireOwner();
-  const { items, otherAccounts, custody, properties } = await wealthView();
+  const { items, otherAccounts, custody, properties, totals, missing } = await wealthView();
   return <div className="space-y-5">
-    <div><h1 className="text-lg font-semibold">Patrimonio</h1><p className="text-sm text-muted">Saldos brutos registrados por cuenta</p></div>
-    <section className="hero rounded-2xl p-5">
-      <p className="font-semibold">Todavía falta completar saldos</p>
-      <p className="mt-1 text-sm opacity-80">Las cuentas pueden incluir dinero de tu papá u otras personas. Para calcular tu patrimonio neto falta conciliar saldos y titularidad.</p>
-    </section>
+    <div><h1 className="text-lg font-semibold">Patrimonio</h1><p className="text-sm text-muted">Tus cuentas y tu parte de las propiedades, sin la plata de tu papá</p></div>
+    <div className={`grid gap-4 ${totals.eur ? "md:grid-cols-2" : ""}`}>
+      <Bubble currency="USD" bucket={totals.usd} />
+      {totals.eur && <Bubble currency="EUR" bucket={totals.eur} />}
+    </div>
+    {(missing.length > 0 || totals.missingRates.length > 0) && <p className="rounded-xl border border-warn/40 bg-card p-3 text-sm text-muted">
+      {missing.length > 0 && <>Sin saldo, no suman: {missing.map((a) => a.name).join(" · ")}. </>}
+      {totals.missingRates.length > 0 && <>Sin cotización, no suman: {totals.missingRates.join(", ")}.</>}
+    </p>}
     <section className="overflow-hidden rounded-xl border border-line bg-card">
       <div className="border-b border-line px-4 py-3 font-medium">Cuentas y fondos</div>
       <div className="divide-y divide-line">
@@ -41,4 +46,20 @@ async function Content() {
     </div>
     {otherAccounts.length > 0 && <details className="rounded-xl border border-line bg-card p-4 text-sm"><summary className="cursor-pointer font-medium">Otras cuentas sin saldo ({otherAccounts.length})</summary><p className="mt-2 text-muted">{otherAccounts.map((a) => a.name).join(" · ")}</p></details>}
   </div>;
+}
+
+function Bubble({ currency, bucket }: { currency: string; bucket: WealthBucket }) {
+  const lines = [
+    ["Cuentas", bucket.accounts],
+    ["Propiedades", bucket.properties],
+    ["Plata de papá", -bucket.custody],
+  ].filter(([, v]) => v !== 0) as [string, number][];
+  return <section className="hero rounded-2xl p-5">
+    <p className="text-sm opacity-80">Patrimonio en {currency}</p>
+    <p className="mt-1 text-3xl font-semibold tabular-nums">{formatMoney(bucket.total, currency)}</p>
+    <div className="mt-3 space-y-0.5 text-sm opacity-90">
+      {lines.map(([label, value]) => <div key={label} className="flex justify-between gap-3"><span>{label}</span><span className="tabular-nums">{value < 0 ? "−" : ""}{formatMoney(Math.abs(value), currency)}</span></div>)}
+    </div>
+    {bucket.converted.length > 0 && <p className="mt-2 text-xs opacity-70">Incluye {bucket.converted.map((c) => `${formatMoney(c.amount, c.currency)} ${c.currency}`).join(" · ")} pasados a USD a la cotización de hoy.</p>}
+  </section>;
 }
