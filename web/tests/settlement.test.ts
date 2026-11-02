@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { settlementCents, settlementCurrency, type SharedMovement } from "../lib/settlement";
+import { settlementCents, settlementCurrency, settlementInDisplayCurrency, type SharedMovement } from "../lib/settlement";
 
 const base: SharedMovement = { date: "2026-10-01", amount: -100, paidBy: "marco", kind: "normal", accountId: "account", entityKind: "household", category: "Otros", marcoShare: 0.5, allocations: [] };
 test("shared expenses respect the October cutoff and the payer", () => {
@@ -23,6 +23,11 @@ test("bank settlements reduce or increase the balance and ambiguous capital is f
   assert.equal(settlementCents({ ...base, kind: "settlement", accountId: null }), null);
   assert.equal(settlementCents({ ...base, entityKind: "property", category: "Aporte" }), null);
   assert.equal(settlementCurrency("USDC"), "USD");
+  assert.equal(settlementCurrency("ARS"), "USD");
+  assert.equal(settlementCurrency("EUR"), "EUR");
+  assert.equal(settlementInDisplayCurrency(1380000, "ARS", -27600, "-17.92"), 896);
+  assert.equal(settlementInDisplayCurrency(12755856, "ARS", -127558.56, "-83.00"), 8300);
+  assert.equal(settlementInDisplayCurrency(100, "ARS", -100, null), null);
 });
 
 test("a client payment collected for Moni creates a debt only for her share", () => {

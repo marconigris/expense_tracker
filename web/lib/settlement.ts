@@ -38,5 +38,12 @@ export function settlementCents(m: SharedMovement): number | null {
 }
 
 export function settlementCurrency(currency: string): string {
-  return currency === "USDC" || currency === "USDT" ? "USD" : currency;
+  return currency === "EUR" ? "EUR" : "USD";
+}
+
+/** Convert the shared part at the transaction's recorded historical rate. */
+export function settlementInDisplayCurrency(cents: number, currency: string, amount: number, amountUsd: string | null): number | null {
+  if (currency === "EUR" || ["USD", "USDC", "USDT"].includes(currency)) return cents;
+  if (amountUsd == null || !Number.isFinite(Number(amountUsd)) || amount === 0) return null;
+  return Math.round(cents * Math.abs(Number(amountUsd) / amount));
 }
