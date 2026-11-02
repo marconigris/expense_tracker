@@ -1,7 +1,7 @@
-import { and, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db, t } from "./db";
 import { MONI_SETTLEMENT_START } from "./catalog";
-import { settlementCents, settlementCurrency, settlementInDisplayCurrency } from "./settlement";
+import { MONI_OPENING_CATEGORY, settlementCents, settlementCurrency, settlementInDisplayCurrency } from "./settlement";
 import type { OwnershipAllocation } from "./allocations";
 
 export async function sharedReport() {
@@ -15,7 +15,8 @@ export async function sharedReport() {
   const rows = await db.select({ tx: t.transactions, entity: t.entities }).from(t.transactions)
     .innerJoin(t.entities, eq(t.transactions.entityId, t.entities.id))
     .where(and(eq(t.transactions.status, "confirmed"), gte(t.transactions.date, MONI_SETTLEMENT_START),
-      inArray(t.transactions.kind, ["normal", "settlement"]), inArray(t.entities.id, entities.map((e) => e.id))));
+      or(inArray(t.transactions.kind, ["normal", "settlement"]), and(eq(t.transactions.kind, "opening"), eq(t.transactions.category, MONI_OPENING_CATEGORY), isNull(t.transactions.accountId))),
+      inArray(t.entities.id, entities.map((e) => e.id))));
   const allocations = rows.length ? await db.select().from(t.transactionAllocations)
     .where(inArray(t.transactionAllocations.transactionId, rows.map(({ tx }) => tx.id))) : [];
   const shares = new Map<string, OwnershipAllocation[]>();
@@ -25,7 +26,7 @@ export async function sharedReport() {
   let needsReview = 0;
   const details = rows.flatMap(({ tx, entity }) => {
     const originalCents = settlementCents({ date: tx.date, amount: Number(tx.amount), paidBy: tx.paidBy,
-      kind: tx.kind as "normal" | "settlement", accountId: tx.accountId, entityKind: entity.kind,
+      kind: tx.kind as "normal" | "settlement" | "opening", accountId: tx.accountId, entityKind: entity.kind,
       category: tx.category, marcoShare: Number(entity.marcoShare), allocations: shares.get(tx.id) ?? [] });
     if (originalCents == null) { needsReview++; return []; }
     if (!originalCents) return [];

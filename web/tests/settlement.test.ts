@@ -33,3 +33,12 @@ test("bank settlements reduce or increase the balance and ambiguous capital is f
 test("a client payment collected for Moni creates a debt only for her share", () => {
   assert.equal(settlementCents({ ...base, amount: 100, entityKind: "payable", allocations: [{ owner: "moni", amount: "91" }, { owner: "other", amount: "9" }] }), -9100);
 });
+
+test("explicit historical balances carry forward once without a bank account", () => {
+  const opening: SharedMovement = { ...base, kind: "opening", category: "Saldo inicial con Moni", accountId: null };
+  assert.equal(settlementCents({ ...opening, amount: -363.02 }), 36302);
+  assert.equal(settlementCents({ ...opening, amount: 421.95 }), -42195);
+  assert.equal(settlementCents({ ...opening, date: "2026-10-02" }), null);
+  assert.equal(settlementCents({ ...opening, category: "Otros" }), null);
+  assert.equal(settlementCents({ ...opening, accountId: "cash" }), null);
+});

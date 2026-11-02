@@ -5,7 +5,7 @@ export type SharedMovement = {
   date: string;
   amount: number;
   paidBy: "marco" | "moni";
-  kind: "normal" | "settlement";
+  kind: "normal" | "settlement" | "opening";
   accountId: string | null;
   entityKind: string;
   category: string | null;
@@ -13,10 +13,16 @@ export type SharedMovement = {
   allocations: OwnershipAllocation[];
 };
 
+export const MONI_OPENING_CATEGORY = "Saldo inicial con Moni";
+
 /** Signed cents: positive means Moni owes Marco. Null means the record needs clarification. */
 export function settlementCents(m: SharedMovement): number | null {
   if (m.date < MONI_SETTLEMENT_START) return 0;
   const cents = Math.round(m.amount * 100);
+  if (m.kind === "opening") {
+    if (m.date !== MONI_SETTLEMENT_START || m.accountId !== null || m.category !== MONI_OPENING_CATEGORY || m.entityKind !== "household") return null;
+    return -cents;
+  }
   if (m.kind === "settlement") {
     // Property capital movements cannot be distinguished from a household settlement yet.
     if (!m.accountId || !["household", "payable"].includes(m.entityKind)) return null;
