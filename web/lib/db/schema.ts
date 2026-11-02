@@ -177,6 +177,19 @@ export const partnerImportRows = pgTable("partner_import_rows", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("partner_import_key_idx").on(t.dedupeKey), index("partner_import_user_idx").on(t.userId, t.status, t.date)]);
 
+// One row per month and currency: the Patrimonio totals as last seen that month (EUR apart, the rest in USD).
+export const wealthSnapshots = pgTable("wealth_snapshots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  month: text("month").notNull(), // YYYY-MM
+  currency: text("currency").notNull(),
+  cash: numeric("cash", { precision: 14, scale: 2 }).notNull(),
+  stocks: numeric("stocks", { precision: 14, scale: 2 }).notNull(),
+  properties: numeric("properties", { precision: 14, scale: 2 }).notNull(),
+  debt: numeric("debt", { precision: 14, scale: 2 }).notNull(),
+  total: numeric("total", { precision: 14, scale: 2 }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("wealth_snapshot_month_idx").on(t.month, t.currency)]);
+
 // Learned from confirmations: "description contains X" -> entity/category.
 export const rules = pgTable("rules", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -57,6 +57,13 @@
       "when": 1793647688660,
       "tag": "0007_unique_otto_octavius",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793653494863,
+      "tag": "0008_charming_deathstrike",
+      "breakpoints": true
     }
   ]
 }

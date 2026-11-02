@@ -44,8 +44,9 @@ test("no EUR bucket without EUR money, and missing rates are reported", () => {
   assert.deepEqual(result.missingRates, ["BRL"]);
 });
 
-test("only IBKR counts as stocks and funds", () => {
+test("IBKR and crypto wallets count as stocks, funds and crypto", () => {
   assert.equal(wealthGroup({ slug: "ibkr" }), "stocks");
+  assert.equal(wealthGroup({ slug: "binance", kind: "crypto" }), "stocks");
   assert.equal(wealthGroup({ slug: "cocos-fci-dolares-plus" }), "cash");
   assert.equal(wealthGroup({ slug: "revolut-ahorro-usd" }), "cash");
 });

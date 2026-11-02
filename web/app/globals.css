@@ -8,6 +8,7 @@
   --line: #e2e8f0;
   --active: #eef2ff;
   --accent: #1e3a8a;
+  --chart: #2f4fc4;
   --pos: #059669;
   --neg: #dc2626;
   --warn: #d97706;
@@ -24,6 +25,7 @@
     --line: #1f2a48;
     --active: #172554;
     --accent: #3b5bdb;
+    --chart: #3b5bdb;
     --pos: #34d399;
     --neg: #f87171;
     --warn: #fbbf24;
@@ -40,6 +42,7 @@
   --color-line: var(--line);
   --color-active: var(--active);
   --color-accent: var(--accent);
+  --color-chart: var(--chart);
   --color-pos: var(--pos);
   --color-neg: var(--neg);
   --color-warn: var(--warn);

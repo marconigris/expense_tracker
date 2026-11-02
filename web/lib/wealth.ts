@@ -1,8 +1,8 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db, t } from "./db";
 import { custodyBalances, propertyYields } from "./reports";
 import { ensureRates, shiftDate, usdPerUnit } from "./fx";
-import { placeCustody, recordedBalance, wealthGroup, wealthTotals, type CustodyHolding } from "./wealth-math";
+import { placeCustody, recordedBalance, wealthGroup, wealthTotals, type CustodyHolding, type WealthBucket } from "./wealth-math";
 
 /**
  * Accounts show Marco's own money: dad's holdings recorded per account are taken out. The bubbles subtract the
@@ -47,4 +47,19 @@ export async function wealthView() {
   const totals = wealthTotals(items.map((a) => ({ currency: a.currency, value: a.value, group: wealthGroup(a), name: a.name })), properties, rates, debts);
   const missing = items.filter((a) => a.value == null);
   return { items: withData, otherAccounts: items.filter((a) => !withData.includes(a)), cash, placement, properties, totals, missing, rates };
+}
+
+/** Saves this month's totals (overwriting earlier saves this month) and returns every month recorded. */
+export async function wealthHistory(totals: { usd: WealthBucket; eur: WealthBucket | null }) {
+  const month = new Date().toISOString().slice(0, 7);
+  const buckets: [string, WealthBucket][] = [["USD", totals.usd]];
+  if (totals.eur) buckets.push(["EUR", totals.eur]);
+  const rows = buckets.map(([currency, b]) => ({ month, currency, cash: b.cash.toFixed(2), stocks: b.stocks.toFixed(2), properties: b.properties.toFixed(2),
+      debt: b.custody.toFixed(2), total: b.total.toFixed(2), updatedAt: new Date() }));
+  for (const row of rows) {
+    await db.insert(t.wealthSnapshots).values(row).onConflictDoUpdate({ target: [t.wealthSnapshots.month, t.wealthSnapshots.currency], set: row });
+  }
+  const history = await db.select().from(t.wealthSnapshots).orderBy(asc(t.wealthSnapshots.month));
+  return history.map((r) => ({ month: r.month, currency: r.currency, cash: Number(r.cash), stocks: Number(r.stocks),
+    properties: Number(r.properties), debt: Number(r.debt), total: Number(r.total) }));
 }

@@ -22,9 +22,9 @@ export type WealthLine = { name: string; amount: number; original?: { amount: nu
 export type WealthBucket = { cash: number; stocks: number; properties: number; custody: number; total: number;
   converted: { currency: string; amount: number }[]; lines: Record<Field, WealthLine[]> };
 
-/** Only IBKR holds stocks and funds; banks, money market, Cocos and crypto can be withdrawn quickly. */
-export function wealthGroup(account: { slug: string }): WealthGroup {
-  return account.slug.startsWith("ibkr") ? "stocks" : "cash";
+/** IBKR and crypto wallets are investments; banks, money market and Cocos can be withdrawn quickly. */
+export function wealthGroup(account: { slug: string; kind?: string }): WealthGroup {
+  return account.slug.startsWith("ibkr") || account.kind === "crypto" ? "stocks" : "cash";
 }
 
 /**

@@ -2,8 +2,9 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { requireOwner } from "@/lib/auth";
 import { formatMoney } from "@/lib/format";
-import { wealthView } from "@/lib/wealth";
+import { wealthHistory, wealthView } from "@/lib/wealth";
 import { groupAccounts, type WealthBucket, type WealthLine } from "@/lib/wealth-math";
+import { WealthChart } from "./wealth-chart";
 
 export default function PatrimonioPage() {
   return <Suspense fallback={<p className="text-muted">Cargando patrimonio…</p>}><Content /></Suspense>;
@@ -13,6 +14,7 @@ async function Content() {
   await connection();
   await requireOwner();
   const { items, otherAccounts, cash, placement, properties, totals, missing, rates } = await wealthView();
+  const history = await wealthHistory(totals);
   return <div className="space-y-5">
     <div><h1 className="text-lg font-semibold">Patrimonio</h1><p className="text-sm text-muted">Solo tu plata: cuentas y tu parte de las propiedades</p></div>
     <div className={`grid gap-4 ${totals.eur ? "md:grid-cols-2" : ""}`}>
@@ -23,6 +25,12 @@ async function Content() {
       {missing.length > 0 && <>Sin saldo, no suman: {missing.map((a) => a.name).join(" · ")}. </>}
       {totals.missingRates.length > 0 && <>Sin cotización, no suman: {totals.missingRates.join(", ")}.</>}
     </p>}
+    <div className={`grid gap-4 ${totals.eur ? "md:grid-cols-2" : ""}`}>
+      {["USD", "EUR"].map((currency) => {
+        const points = history.filter((h) => h.currency === currency);
+        return points.length > 0 && <WealthChart key={currency} currency={currency} points={points} />;
+      })}
+    </div>
     <h2 className="pt-1 font-medium">Cuentas y fondos</h2>
     {groupAccounts(items).map((group) => <details key={group.region} className="group overflow-hidden rounded-xl border border-line bg-card">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 group-open:border-b group-open:border-line [&::-webkit-details-marker]:hidden">
@@ -62,8 +70,8 @@ async function Content() {
 }
 
 const GROUPS = [
-  { key: "cash", label: "Banco / Cash", tag: "Líquido", hint: "Bancos, money market, Cocos, cripto", tone: "bg-white" },
-  { key: "stocks", label: "Stocks / Fondos", tag: "Inversión", hint: "IBKR", tone: "bg-white/55" },
+  { key: "cash", label: "Banco / Cash", tag: "Líquido", hint: "Bancos, money market, Cocos", tone: "bg-white" },
+  { key: "stocks", label: "Stocks / Fondos / Crypto", tag: "Inversión", hint: "IBKR, Binance, Crypto.com", tone: "bg-white/55" },
   { key: "properties", label: "Propiedades", tag: "Ilíquido", hint: "Tu parte del capital aportado", tone: "bg-white/25" },
 ] as const;
 
@@ -77,7 +85,7 @@ function Line({ label, tag, hint, tone, amount, currency, lines, negative = fals
   return <details className="group text-sm">
     <summary className={`flex items-start justify-between gap-3 [&::-webkit-details-marker]:hidden ${lines.length ? "cursor-pointer" : "pointer-events-none"} list-none`}>
       <span className="flex items-start gap-2">{tone && <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${tone}`} />}<span>
-        <span className="flex items-center gap-2 font-medium">{label}<span className={tagClass}>{tag}</span></span>
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-medium">{label}<span className={tagClass}>{tag}</span></span>
         <span className="block text-xs opacity-70">{hint}</span>
       </span></span>
       <span className="flex items-center gap-1.5 tabular-nums">{sign}{formatMoney(amount, currency)}{lines.length > 0 && <span className="text-xs opacity-60 transition-transform group-open:rotate-180">▾</span>}</span>
