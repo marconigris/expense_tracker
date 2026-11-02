@@ -3,15 +3,17 @@
 import { useActionState, useState, useTransition } from "react";
 import { addManualExpense, savePartnerRows, setPartnerRowsDiscarded, uploadPartnerCsv, type PartnerResult } from "./actions";
 import { formatMoney } from "@/lib/format";
+import { PARTNER_AREA_LABELS, PRIVATE_PARTNER_AREAS } from "@/lib/partner-areas";
 
 const input = "block w-full rounded-lg border border-line bg-bg px-3 py-2 text-sm";
-const areaLabels: Record<string, string> = { brasil: "Brasil", cabarete: "Cabarete", europa: "Europa", personal: "Personal" };
+const areaLabels = PARTNER_AREA_LABELS;
+const areaOptions = Object.entries(areaLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>);
 
 function ExpenseFields() {
   const [area, setArea] = useState("brasil");
   return <div className="space-y-3">
-    <label className="block text-sm"><span className="text-muted">Categoría</span><select name="area" value={area} onChange={(e) => setArea(e.target.value)} className={input}><option value="brasil">Brasil</option><option value="cabarete">Cabarete</option><option value="europa">Europa</option><option value="personal">Personal</option></select></label>
-    {area === "personal" ? <><input type="hidden" name="percent" value="50" /><p className="text-xs text-muted">Gasto personal: solo aparece en tu vista.</p></> : <label className="block text-sm"><span className="text-muted">Reparto</span><select name="percent" defaultValue="50" className={input}><option value="50">Mitad cada uno</option><option value="100">100% Marco</option><option value="0">100% Moni</option></select></label>}
+    <label className="block text-sm"><span className="text-muted">Categoría</span><select name="area" value={area} onChange={(e) => setArea(e.target.value)} className={input}>{areaOptions}</select></label>
+    {PRIVATE_PARTNER_AREAS.includes(area) ? <><input type="hidden" name="percent" value="50" /><p className="text-xs text-muted">Solo aparece en tu vista y no cambia el balance con Marco.</p></> : <label className="block text-sm"><span className="text-muted">Reparto</span><select name="percent" defaultValue="50" className={input}><option value="50">Mitad cada uno</option><option value="100">100% Marco</option><option value="0">100% Moni</option></select></label>}
   </div>;
 }
 
@@ -94,10 +96,10 @@ export function ImportInbox({ rows }: { rows: InboxRow[] }) {
     </details>}
     {open.length > 0 && <div className="sticky bottom-0 -mx-4 space-y-2 border-t border-line bg-card px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
       <div className="grid grid-cols-2 gap-2">
-        <select aria-label="Categoría" value={area} onChange={(e) => setArea(e.target.value)} className={input}>{Object.entries(areaLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-        {area === "personal" ? <p className="self-center text-xs text-muted">Solo en tu vista</p> : <select aria-label="Reparto" value={percent} onChange={(e) => setPercent(Number(e.target.value))} className={input}><option value={50}>Mitad cada uno</option><option value={100}>100% Marco</option><option value={0}>100% Moni</option></select>}
+        <select aria-label="Categoría" value={area} onChange={(e) => setArea(e.target.value)} className={input}>{areaOptions}</select>
+        {PRIVATE_PARTNER_AREAS.includes(area) ? <p className="self-center text-xs text-muted">Solo en tu vista</p> : <select aria-label="Reparto" value={percent} onChange={(e) => setPercent(Number(e.target.value))} className={input}><option value={50}>Mitad cada uno</option><option value={100}>100% Marco</option><option value={0}>100% Moni</option></select>}
       </div>
-      <button type="button" disabled={pending || !chosen.length} onClick={() => run(chosen, () => savePartnerRows({ ids: chosen, area, percent: area === "personal" ? 50 : percent }))} className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">
+      <button type="button" disabled={pending || !chosen.length} onClick={() => run(chosen, () => savePartnerRows({ ids: chosen, area, percent: PRIVATE_PARTNER_AREAS.includes(area) ? 50 : percent }))} className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">
         {chosen.length ? `Guardar ${chosen.length} en ${areaLabels[area]}` : "Marcá gastos para guardar"}
       </button>
     </div>}

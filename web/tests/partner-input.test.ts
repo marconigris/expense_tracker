@@ -53,3 +53,12 @@ test("invalid dates, amounts and currencies cannot enter partner expenses", () =
   assert.throws(() => validatePartnerExpense({ ...row, currency: "INVALID" }));
   assert.throws(() => validatePartnerExpense({ ...row, date: "2026-02-30" }));
 });
+
+test("Camp expenses are Moni's own and stay out of her consumption total", () => {
+  assert.equal(partnerArea("camp"), "camp");
+  const rows = [
+    { date: "2026-10-01", area: "personal", amount: -20, amountUsd: -20, marcoShare: 0, allocations: [] },
+    { date: "2026-10-01", area: "camp", amount: -75, amountUsd: -75, marcoShare: 0, allocations: [] },
+  ];
+  assert.deepEqual(partnerMonthly(rows), [{ month: "2026-10", total: 20, areas: { personal: 20, camp: 75 }, missingFx: 0 }]);
+});

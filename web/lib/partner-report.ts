@@ -1,4 +1,5 @@
 import type { OwnershipAllocation } from "./allocations";
+import { BUSINESS_PARTNER_AREAS, PRIVATE_PARTNER_AREAS } from "./partner-areas";
 
 export type PartnerMonthlyInput = { date: string; area: string; amount: number; amountUsd: number | null; marcoShare: number; allocations: OwnershipAllocation[] };
 
@@ -11,7 +12,7 @@ export function partnerMonthly(rows: PartnerMonthlyInput[]) {
     months.set(month, item);
     if (row.amount === 0) continue;
     if (row.amountUsd == null) { item.missingFx++; continue; }
-    let ratio = row.area === "personal" ? 1 : 1 - row.marcoShare;
+    let ratio = PRIVATE_PARTNER_AREAS.includes(row.area) ? 1 : 1 - row.marcoShare;
     if (row.allocations.length) {
       const amountCents = Math.round(row.amount * 100);
       const allocationCents = row.allocations.reduce((sum, a) => sum + Math.round(Number(a.amount) * 100), 0);
@@ -20,7 +21,7 @@ export function partnerMonthly(rows: PartnerMonthlyInput[]) {
       ratio = moni / row.amount;
     }
     const value = -row.amountUsd * ratio;
-    item.total += value;
+    if (!BUSINESS_PARTNER_AREAS.includes(row.area)) item.total += value;
     item.areas[row.area] = (item.areas[row.area] ?? 0) + value;
   }
   return [...months.values()].sort((a, b) => b.month.localeCompare(a.month));
