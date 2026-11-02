@@ -7,6 +7,7 @@ import { requirePartner } from "@/lib/auth";
 import { db, t } from "@/lib/db";
 import { ensureRates } from "@/lib/fx";
 import { parseCsv } from "@/lib/import/csv";
+import { parsePartnerRevolut } from "@/lib/import/partner-revolut";
 import { isPartnerExpenseSpace, PARTNER_AREAS, partnerArea, partnerCsvKey, partnerSplit, validatePartnerExpense, type PartnerExpense } from "@/lib/partner-input";
 
 export type PartnerResult = { ok: boolean; message: string; requestId?: string };
@@ -95,8 +96,9 @@ export async function previewPartnerCsv(_previous: PreviewResult | null, form: F
   const fallbackCurrency = String(form.get("currency") ?? "").toUpperCase();
   if (!(file instanceof File) || !/\.csv$/i.test(file.name) || file.size === 0 || file.size > 1_000_000 || !source || source.length > 100) return { ok: false, message: "Elegí un CSV de hasta 1 MB e indicá el banco o tarjeta." };
   const text = await file.text();
-  if (text.includes("Current Accounts Transaction Statements")) return { ok: false, message: "Este resumen consolidado no es compatible. Exportá los movimientos de la cuenta en CSV." };
-  const parsed = parseCsv(text);
+  const consolidated = parsePartnerRevolut(text);
+  if (consolidated?.errors.length) return { ok: false, message: `No pude leer todo el extracto: ${consolidated.errors[0]} Revisá el archivo antes de importarlo.` };
+  const parsed = consolidated ?? parseCsv(text);
   if (parsed.rows.length > 500) return { ok: false, message: "El archivo supera 500 movimientos. Dividilo en archivos más chicos." };
   const seen = new Map<string, number>();
   const rows: PartnerExpense[] = [];

@@ -34,7 +34,7 @@ function Preview({ preview }: { preview: PreviewResult }) {
   const [result, action, pending] = useActionState(importPartnerCsv, null);
   return <form key={result?.requestId ?? "preview"} action={action} className="space-y-3 rounded-xl border border-line bg-card p-4">
     <input type="hidden" name="source" value={preview.source} />
-    <p className="text-sm font-medium">Elegí los gastos para esta categoría</p><p className="text-xs text-muted">Solo se guardan los que marques. Revisá también si ya los cargaste a mano.{preview.skipped ? ` Se omitieron ${preview.skipped} filas que no son gastos compatibles.` : ""}</p>
+    <p className="text-sm font-medium">Elegí los gastos para esta categoría</p><p className="text-xs text-muted">Solo se guardan los que marques. No selecciones transferencias ni gastos del negocio. Revisá también si ya los cargaste a mano.{preview.skipped ? ` Se omitieron ${preview.skipped} filas que no son gastos compatibles.` : ""}</p>
     <ExpenseFields />
     <div className="max-h-[32rem] space-y-1 overflow-y-auto rounded-lg border border-line">{preview.rows?.map((row, i) => <label key={i} className="flex items-start gap-3 border-b border-line p-3 text-sm last:border-0"><input name="row" type="checkbox" value={JSON.stringify(row)} className="mt-1" /><span className="min-w-0 flex-1"><span className="block break-words">{row.description}</span><span className="text-xs text-muted">{row.date}</span></span><span className="whitespace-nowrap tabular-nums">{formatMoney(row.amount, row.currency)} {row.currency}</span></label>)}</div>
     <button disabled={pending} className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{pending ? "Guardando…" : "Guardar seleccionados"}</button>
