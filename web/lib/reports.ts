@@ -177,6 +177,6 @@ export async function propertyYields() {
       const shares = allocations.get(row.id) ?? [];
       return sum + marcoReportedAmount(Number(row.original), Number(row.converted ?? 0), shares, p.kind, Number(p.marcoShare));
     }, 0);
-    return { name: p.name, share: Number(p.marcoShare), stake, stakeCurrency: latest?.currency ?? "USD", returned, yieldPct: stake ? returned / stake : null };
+    return { slug: p.slug, name: p.name, share: Number(p.marcoShare), value: latest ? Number(latest.value) : 0, stake, stakeCurrency: latest?.currency ?? "USD", returned, yieldPct: stake ? returned / stake : null };
   });
 }

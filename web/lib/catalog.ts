@@ -3,6 +3,10 @@
 
 // Earlier shared transactions remain in history, but do not carry into settlements.
 export const MONI_SETTLEMENT_START = "2026-10-01";
+/** Earlier ownership of properties: Marco held La Mariposa alone until Moni bought her half (52,012 EUR on 2026-08-19). */
+export const PROPERTY_SHARE_HISTORY: { slug: string; before: string; share: number }[] = [
+  { slug: "la-mariposa", before: "2026-08-19", share: 1 },
+];
 
 type EntitySeed = {
   slug: string;
