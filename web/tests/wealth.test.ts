@@ -18,7 +18,7 @@ test("a snapshot stays dated and is not silently rolled forward", () => {
   assert.equal(result.later, true);
   assert.equal(result.date, "2026-01-01");
 });
-import { balanceAt, groupAccounts, monthEnds, propertyShareAt, placeCustody, wealthGroup, wealthTotals } from "../lib/wealth-math";
+import { balanceAt, groupAccounts, monthEnds, placeCustody, wealthGroup, wealthTotals } from "../lib/wealth-math";
 
 test("EUR stays apart, other currencies go to USD, IBKR is stocks, and debts are subtracted", () => {
   const accounts = [
@@ -112,8 +112,7 @@ test("month ends run up to the current month", () => {
   assert.deepEqual(monthEnds("2026-11", "2026-11"), []);
 });
 
-test("La Mariposa was all Marco's until Moni bought half", () => {
-  assert.equal(propertyShareAt("la-mariposa", 0.5, "2026-07-31"), 1);
-  assert.equal(propertyShareAt("la-mariposa", 0.5, "2026-08-19"), 0.5);
-  assert.equal(propertyShareAt("marquis", 0.33, "2026-01-31"), 0.33);
+test("collecting a settlement does not lower earlier months", () => {
+  const moves = [{ accountId: "a", date: "2026-08-19", amount: "52012.00", status: "confirmed", batchId: "b", kind: "settlement" }];
+  assert.deepEqual(balanceAt({ value: 77250, date: "2026-11-02" }, moves, "2026-07-31"), { value: 77250, assumed: false });
 });

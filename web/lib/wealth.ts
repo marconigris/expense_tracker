@@ -2,7 +2,7 @@ import { asc, eq } from "drizzle-orm";
 import { db, t } from "./db";
 import { custodyBalances, custodyLedger, propertyYields, summarizeCustody } from "./reports";
 import { ensureRates, shiftDate, usdPerUnit } from "./fx";
-import { balanceAt, monthEnds, propertyShareAt, placeCustody, recordedBalance, wealthGroup, wealthTotals, type CustodyHolding, type WealthBucket } from "./wealth-math";
+import { balanceAt, monthEnds, placeCustody, recordedBalance, wealthGroup, wealthTotals, type CustodyHolding, type WealthBucket } from "./wealth-math";
 
 /**
  * Accounts show Marco's own money: dad's holdings recorded per account are taken out. The bubbles subtract the
@@ -77,7 +77,7 @@ export async function wealthTimeline(view: View, from = "2026-01") {
   if (!months.length) return { points: [] as WealthPointRow[], assumed: [] as string[] };
   const [movements, ledger] = await Promise.all([
     db.select({ accountId: t.transactions.accountId, date: t.transactions.date, amount: t.transactions.amount,
-      status: t.transactions.status, batchId: t.transactions.importBatchId }).from(t.transactions),
+      status: t.transactions.status, batchId: t.transactions.importBatchId, kind: t.transactions.kind }).from(t.transactions),
     custodyLedger(),
   ]);
   const accounts = [...view.items, ...view.otherAccounts].filter((a) => a.gross != null && a.date);
@@ -94,8 +94,7 @@ export async function wealthTimeline(view: View, from = "2026-01") {
     const custody = summarizeCustody(ledger.filter((m) => m.date <= end));
     const debts = custody.map((c) => ({ currency: c.currency, balance: c.balance, name: "Plata de papá" }));
     const rates = Object.fromEntries(await Promise.all(currencies.map(async (c) => [c, await usdPerUnit(c, end)] as const)));
-    const stakes = view.properties.map((p) => ({ ...p, stake: p.value * propertyShareAt(p.slug, p.share, end) }));
-    const totals = wealthTotals(balances, stakes, rates, debts);
+    const totals = wealthTotals(balances, view.properties, rates, debts);
     for (const [currency, b] of [["USD", totals.usd], ["EUR", totals.eur]] as const) {
       if (b) points.push({ month, currency, cash: b.cash, stocks: b.stocks, properties: b.properties, debt: b.custody, total: b.total });
     }

@@ -1,4 +1,3 @@
-import { PROPERTY_SHARE_HISTORY } from "./catalog";
 type Movement = { date: string; amount: string; kind: string; status: string; batchId: string | null };
 type Snapshot = { date: string; value: string; notes: string | null };
 
@@ -102,23 +101,19 @@ export function placeCustody(bank: { currency: string; balance: number }[], hold
   });
 }
 
-type Movement2 = { accountId: string | null; date: string; amount: string; status: string; batchId: string | null };
+type Movement2 = { accountId: string | null; date: string; amount: string; status: string; batchId: string | null; kind?: string };
 
 /**
  * Balance of each account at `date`, walking back from its latest known balance (`anchor`) by undoing the
  * physical movements after `date`. Accounts without movements keep their anchor value (marked `assumed`).
+ * Settlements (e.g. Moni paying what she owed) are not undone: collecting a debt does not change net worth.
  */
 export function balanceAt(anchor: { value: number; date: string }, movements: Movement2[], date: string) {
   if (date >= anchor.date) return { value: anchor.value, assumed: false };
   const relevant = movements.filter((m) => m.batchId != null || m.status === "confirmed");
-  const after = relevant.filter((m) => m.date > date && m.date <= anchor.date);
+  const after = relevant.filter((m) => m.date > date && m.date <= anchor.date && m.kind !== "settlement");
   const cents = Math.round(anchor.value * 100) - after.reduce((sum, m) => sum + Math.round(Number(m.amount) * 100), 0);
   return { value: cents / 100, assumed: relevant.length === 0 };
-}
-
-/** Marco's share of a property on `date`, using the earliest recorded earlier ownership that still applies. */
-export function propertyShareAt(slug: string, current: number, date: string, history = PROPERTY_SHARE_HISTORY) {
-  return history.filter((h) => h.slug === slug && date < h.before).sort((a, b) => a.before.localeCompare(b.before))[0]?.share ?? current;
 }
 
 /** Last day of each month from `from` (YYYY-MM) up to, not including, `until` (YYYY-MM). */
