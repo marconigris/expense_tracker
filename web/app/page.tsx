@@ -35,7 +35,7 @@ async function Dashboard({ searchParams }: Pick<PageProps<"/">, "searchParams">)
     for (const m of months) for (const [k, v] of Object.entries(m[key])) acc[k] = (acc[k] ?? 0) + v;
     return Object.entries(acc).sort((a, b) => b[1] - a[1]);
   };
-  const money = (v: number) => formatMoney(v, currency, { compact: true });
+  const money = (v: number) => formatMoney(v, currency);
 
   return (
     <div className="space-y-5">
@@ -110,8 +110,8 @@ async function Dashboard({ searchParams }: Pick<PageProps<"/">, "searchParams">)
                 {p.name} <span className="text-muted">({Math.round(p.share * 100)}%)</span>
               </span>
               <span className="tabular-nums">
-                {formatMoney(p.stake, p.stakeCurrency, { compact: true })}
-                <span className="text-muted"> · {p.yieldPct == null ? "—" : `${(p.yieldPct * 100).toFixed(1)}%`} anual</span>
+                {formatMoney(p.stake, p.stakeCurrency)}
+                <span className="text-muted"> · {p.yieldPct == null ? "—" : `${Math.round(p.yieldPct * 100)}%`} anual</span>
               </span>
             </div>
           ))}
