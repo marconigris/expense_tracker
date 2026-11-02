@@ -33,7 +33,7 @@ export async function sharedReport() {
     totals.set(currency, (totals.get(currency) ?? 0) + cents);
     const group = groups.get(entity.id) ?? new Map<string, number>();
     group.set(currency, (group.get(currency) ?? 0) + cents); groups.set(entity.id, group);
-    return [{ id: tx.id, date: tx.date, description: tx.description, entity: entity.name, currency, cents, paidBy: tx.paidBy, kind: tx.kind, amount: Number(tx.amount) }];
+    return [{ id: tx.id, date: tx.date, description: tx.description, entity: entity.name, currency, cents, paidBy: tx.paidBy, kind: tx.kind, amount: Number(tx.amount), entityKind: entity.kind, notes: tx.notes }];
   }).sort((a, b) => b.date.localeCompare(a.date));
   return { entities: entities.map((e) => ({ id: e.id, name: e.name, balances: [...(groups.get(e.id) ?? [])].map(([currency, cents]) => ({ currency, cents })) })),
     totals: [...totals].map(([currency, cents]) => ({ currency, cents })), details, needsReview, pendingSinceCutoff };

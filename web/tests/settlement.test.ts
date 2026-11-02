@@ -19,7 +19,12 @@ test("bank settlements reduce or increase the balance and ambiguous capital is f
   assert.equal(settlementCents({ ...base, amount: 20, kind: "settlement" }), -2000);
   assert.equal(settlementCents({ ...base, amount: -20, kind: "settlement" }), 2000);
   assert.equal(settlementCents({ ...base, kind: "settlement", entityKind: "property" }), null);
+  assert.equal(settlementCents({ ...base, kind: "settlement", entityKind: "payable", amount: -50 }), 5000);
   assert.equal(settlementCents({ ...base, kind: "settlement", accountId: null }), null);
   assert.equal(settlementCents({ ...base, entityKind: "property", category: "Aporte" }), null);
   assert.equal(settlementCurrency("USDC"), "USD");
+});
+
+test("a client payment collected for Moni creates a debt only for her share", () => {
+  assert.equal(settlementCents({ ...base, amount: 100, entityKind: "payable", allocations: [{ owner: "moni", amount: "91" }, { owner: "other", amount: "9" }] }), -9100);
 });

@@ -19,7 +19,7 @@ export function settlementCents(m: SharedMovement): number | null {
   const cents = Math.round(m.amount * 100);
   if (m.kind === "settlement") {
     // Property capital movements cannot be distinguished from a household settlement yet.
-    if (!m.accountId || m.entityKind !== "household") return null;
+    if (!m.accountId || !["household", "payable"].includes(m.entityKind)) return null;
     return -cents;
   }
   if (m.entityKind === "property" && m.category === "Aporte") return null;

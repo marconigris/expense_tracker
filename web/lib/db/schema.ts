@@ -22,7 +22,8 @@ export const entityKind = pgEnum("entity_kind", [
   "household", // shared living costs with Moni, split 50/50
   "property", // joint real-estate investment
   "investment", // Marco's financial wealth: interest, brokers, crypto
-  "custody", // money held in Marco's accounts that belongs to someone else
+  "custody", // money held in Marco's accounts that belongs to his father
+  "payable", // amounts collected on someone else's behalf
 ]);
 
 export const accountKind = pgEnum("account_kind", ["bank", "savings", "broker", "cash", "crypto"]);

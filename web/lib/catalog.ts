@@ -7,7 +7,7 @@ export const MONI_SETTLEMENT_START = "2026-10-01";
 type EntitySeed = {
   slug: string;
   name: string;
-  kind: "personal" | "business" | "household" | "property" | "investment" | "custody";
+  kind: "personal" | "business" | "household" | "property" | "investment" | "custody" | "payable";
   marcoShare?: string;
   currency?: string;
   sharedWithMoni?: boolean;
@@ -27,6 +27,7 @@ export const ENTITIES: EntitySeed[] = [
   { slug: "inversiones", name: "Inversiones", kind: "investment", shortcut: "i" },
   // Dad's USD/EUR that Marco manages; reported quarterly and paid out to him.
   { slug: "papa", name: "Papá (custodia)", kind: "custody", shortcut: "d" },
+  { slug: "moni-clientes", name: "Clientes de Moni", kind: "payable", sharedWithMoni: true, shortcut: "n" },
 ];
 
 type AccountSeed = {
@@ -63,6 +64,7 @@ export const ACCOUNTS: AccountSeed[] = [
   { slug: "wise-usd", name: "Wise Main USD", institution: "Wise", currency: "USD", kind: "bank", defaultEntity: "inversiones", hint: "Cuenta con fondos de más de una persona: revisar la titularidad de los movimientos y rendimientos." },
   { slug: "wise-ahorro-usd", name: "Wise Savings USD", institution: "Wise", currency: "USD", kind: "savings", defaultEntity: "inversiones", hint: "Fondo de ahorro; revisar titularidad, rendimientos y comisiones." },
   { slug: "wise-eur", name: "Wise EUR", institution: "Wise", currency: "EUR", kind: "savings", defaultEntity: "inversiones" },
+  { slug: "cgd-eur", name: "CGD EUR", institution: "CGD", currency: "EUR", kind: "bank", defaultEntity: "personal", active: false, hint: "Cuenta propia cerrada a finales de septiembre de 2026; transferencias históricas pendientes de conciliar." },
   { slug: "bunq-eur", name: "Bunq Ahorro EUR", institution: "Bunq", currency: "EUR", kind: "savings", defaultEntity: "inversiones", hint: "Cuenta remunerada con fondos de más de una persona; revisar titularidad e intereses." },
   { slug: "bunq-corriente-eur", name: "Bunq Movimientos EUR", institution: "Bunq", currency: "EUR", kind: "bank", defaultEntity: "personal", hint: "Cuenta en euros usada para recibir fondos y moverlos a Bunq Ahorro." },
   { slug: "cash-usd", name: "Efectivo USD", institution: "Efectivo", currency: "USD", kind: "cash", defaultEntity: "hogar-cabarete", hint: "Entra de los negocios; se gasta mayormente en Cabarete o se le paga a mi papá intereses de los negocios." },
@@ -81,6 +83,7 @@ export const CATEGORIES: Record<string, string[]> = {
   property: ["Aporte", "Distribución", "Mantenimiento", "Impuestos", "Otros"],
   investment: ["Intereses", "Rendimiento", "Comisiones"],
   custody: ["Intereses", "Intereses Ibiza", "Panamá", "Pago a papá", "Otros"],
+  payable: ["Cobro cliente", "Otros"],
 };
 
 // Rules known up front; everything else is learned from confirmations.
