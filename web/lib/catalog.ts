@@ -1,6 +1,9 @@
 // Starting catalog of entities, accounts and categories. The seed script
 // upserts these by slug, so editing this file and re-seeding is safe.
 
+// Earlier shared transactions remain in history, but do not carry into settlements.
+export const MONI_SETTLEMENT_START = "2026-10-01";
+
 type EntitySeed = {
   slug: string;
   name: string;

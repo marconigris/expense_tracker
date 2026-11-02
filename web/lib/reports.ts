@@ -1,4 +1,5 @@
-import { and, eq, gte, ne, sql } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, ne, sql } from "drizzle-orm";
+import { custodyAmount, marcoReportedAmount, type OwnershipAllocation } from "./allocations";
 import { db, t } from "./db";
 import type { Entity } from "./db/schema";
 
@@ -20,10 +21,22 @@ function monthsAgo(n: number) {
   return d.toISOString().slice(0, 10);
 }
 
+async function allocationsFor(ids: string[]) {
+  const byTransaction = new Map<string, OwnershipAllocation[]>();
+  if (ids.length === 0) return byTransaction;
+  const allocations = await db.select().from(t.transactionAllocations).where(inArray(t.transactionAllocations.transactionId, ids));
+  for (const allocation of allocations) {
+    const current = byTransaction.get(allocation.transactionId) ?? [];
+    current.push({ owner: allocation.owner, amount: allocation.amount });
+    byTransaction.set(allocation.transactionId, current);
+  }
+  return byTransaction;
+}
+
 /**
  * Marco's monthly picture from confirmed, normal movements:
  * - business / investment: the signed sum is what it gave him (ads or fees reduce it).
- * - property: only distributions count as income; contributions are capital, not spending.
+ * - property: only distributions count as income; Marco's ownership is applied unless the movement has an explicit split.
  * - personal: outflows are consumption, inflows are other income.
  * - household: Marco consumes his share of everything spent, whoever paid it.
  * - custody (dad's money) and transfers stay out.
@@ -33,10 +46,11 @@ export async function monthlySummary(currency: Currency, months = 12) {
   const from = monthsAgo(months - 1);
   const rows = await db
     .select({
-      month: sql<string>`to_char(${t.transactions.date}, 'YYYY-MM')`,
+      id: t.transactions.id,
+      date: t.transactions.date,
       entityId: t.transactions.entityId,
-      inflow: sql<string>`coalesce(sum(${amount}) filter (where ${amount} > 0), 0)`,
-      outflow: sql<string>`coalesce(sum(${amount}) filter (where ${amount} < 0), 0)`,
+      original: t.transactions.amount,
+      converted: amount,
     })
     .from(t.transactions)
     .where(
@@ -46,10 +60,12 @@ export async function monthlySummary(currency: Currency, months = 12) {
         gte(t.transactions.date, from),
         sql`${t.transactions.entityId} is not null`,
       ),
-    )
-    .groupBy(sql`1`, t.transactions.entityId);
+    );
 
-  const entities = await db.select().from(t.entities);
+  const [entities, allocations] = await Promise.all([
+    db.select().from(t.entities),
+    allocationsFor(rows.map((r) => r.id)),
+  ]);
   const byId = new Map(entities.map((e) => [e.id, e]));
 
   const summaries = new Map<string, MonthSummary>();
@@ -61,25 +77,26 @@ export async function monthlySummary(currency: Currency, months = 12) {
   const add = (bucket: Record<string, number>, key: string, v: number) => (bucket[key] = (bucket[key] ?? 0) + v);
 
   for (const r of rows) {
-    const s = summaries.get(r.month);
+    const s = summaries.get(r.date.slice(0, 7));
     const e = r.entityId ? byId.get(r.entityId) : undefined;
     if (!s || !e) continue;
-    const inflow = Number(r.inflow);
-    const outflow = -Number(r.outflow);
+    const shares = allocations.get(r.id) ?? [];
+    const converted = Number(r.converted ?? 0);
+    const value = marcoReportedAmount(Number(r.original), converted, shares, e.kind, Number(e.marcoShare));
     switch (e.kind) {
       case "business":
       case "investment":
-        add(s.bySource, e.name, inflow - outflow);
+        add(s.bySource, e.name, value);
         break;
       case "property":
-        add(s.bySource, e.name, inflow);
+        if (value > 0) add(s.bySource, e.name, value);
         break;
       case "personal":
-        add(s.bySpend, e.name, outflow);
-        if (inflow) add(s.bySource, "Otros ingresos", inflow);
+        if (value < 0) add(s.bySpend, e.name, -value);
+        if (value > 0) add(s.bySource, "Otros ingresos", value);
         break;
       case "household":
-        add(s.bySpend, e.name, (outflow - inflow) * Number(e.marcoShare));
+        add(s.bySpend, e.name, -value);
         break;
     }
   }
@@ -92,12 +109,18 @@ export async function monthlySummary(currency: Currency, months = 12) {
 
 /** Balance of dad's money held by Marco, per currency. */
 export async function custodyBalances() {
-  return db
-    .select({ currency: t.transactions.currency, balance: sql<string>`sum(${t.transactions.amount})` })
+  const rows = await db
+    .select({ id: t.transactions.id, currency: t.transactions.currency, amount: t.transactions.amount, entityKind: t.entities.kind })
     .from(t.transactions)
-    .innerJoin(t.entities, eq(t.entities.id, t.transactions.entityId))
-    .where(and(eq(t.entities.kind, "custody"), ne(t.transactions.kind, "transfer")))
-    .groupBy(t.transactions.currency);
+    .leftJoin(t.entities, eq(t.entities.id, t.transactions.entityId))
+    .where(and(eq(t.transactions.status, "confirmed"), inArray(t.transactions.kind, ["normal", "opening", "settlement"])));
+  const allocations = await allocationsFor(rows.map((r) => r.id));
+  const totals = new Map<string, number>();
+  for (const row of rows) {
+    const value = custodyAmount(Number(row.amount), row.entityKind === "custody", allocations.get(row.id) ?? []);
+    if (value !== 0) totals.set(row.currency, (totals.get(row.currency) ?? 0) + value);
+  }
+  return [...totals].map(([currency, balance]) => ({ currency, balance }));
 }
 
 export async function pendingCount() {
@@ -121,18 +144,22 @@ export async function receivableBalances(currency: Currency) {
 
 /** Capital Marco has in each property and what it returned in the last 12 months. */
 export async function propertyYields() {
-  const amount = t.transactions.amountUsd;
   const props = await db.select().from(t.entities).where(eq(t.entities.kind, "property"));
   const vals = await db.select().from(t.valuations);
+  if (props.length === 0) return [];
   const returns = await db
-    .select({ entityId: t.transactions.entityId, total: sql<string>`coalesce(sum(${amount}) filter (where ${amount} > 0), 0)` })
+    .select({ id: t.transactions.id, entityId: t.transactions.entityId, original: t.transactions.amount, converted: t.transactions.amountUsd })
     .from(t.transactions)
-    .where(and(eq(t.transactions.status, "confirmed"), eq(t.transactions.kind, "normal"), gte(t.transactions.date, monthsAgo(11))))
-    .groupBy(t.transactions.entityId);
+    .where(and(eq(t.transactions.status, "confirmed"), eq(t.transactions.kind, "normal"), gte(t.transactions.date, monthsAgo(11)),
+      inArray(t.transactions.entityId, props.map((p) => p.id)), gt(t.transactions.amount, "0")));
+  const allocations = await allocationsFor(returns.map((r) => r.id));
   return props.map((p: Entity) => {
     const latest = vals.filter((v) => v.entityId === p.id).sort((a, b) => b.date.localeCompare(a.date))[0];
     const stake = latest ? Number(latest.value) * Number(p.marcoShare) : 0;
-    const returned = Number(returns.find((r) => r.entityId === p.id)?.total ?? 0);
+    const returned = returns.filter((r) => r.entityId === p.id).reduce((sum, row) => {
+      const shares = allocations.get(row.id) ?? [];
+      return sum + marcoReportedAmount(Number(row.original), Number(row.converted ?? 0), shares, p.kind, Number(p.marcoShare));
+    }, 0);
     return { name: p.name, share: Number(p.marcoShare), stake, stakeCurrency: latest?.currency ?? "USD", returned, yieldPct: stake ? returned / stake : null };
   });
 }

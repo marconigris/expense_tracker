@@ -126,6 +126,19 @@ export const transactions = pgTable(
   ],
 );
 
+// Ownership of a single bank movement can be shared without duplicating the movement.
+// Allocation amounts use the transaction's currency and must sum to its signed amount.
+export const transactionAllocations = pgTable(
+  "transaction_allocations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    transactionId: uuid("transaction_id").notNull().references(() => transactions.id, { onDelete: "cascade" }),
+    owner: text("owner", { enum: ["marco", "moni", "papa", "other"] }).notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+  },
+  (t) => [uniqueIndex("tx_allocation_owner_idx").on(t.transactionId, t.owner)],
+);
+
 // Learned from confirmations: "description contains X" -> entity/category.
 export const rules = pgTable("rules", {
   id: uuid("id").primaryKey().defaultRandom(),
