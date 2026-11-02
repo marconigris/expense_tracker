@@ -34,7 +34,7 @@ function guessPattern(description: string) {
     .join(" ");
 }
 
-export function Inbox({ rows: initial, entities }: { rows: InboxRow[]; entities: InboxEntity[] }) {
+export function Inbox({ rows: initial, entities, totalCount }: { rows: InboxRow[]; entities: InboxEntity[]; totalCount: number }) {
   const [rows, setRows] = useState(initial);
   const [active, setActive] = useState(0);
   const [learn, setLearn] = useState<Record<string, string>>({});
@@ -83,6 +83,7 @@ export function Inbox({ rows: initial, entities }: { rows: InboxRow[]; entities:
   }
 
   function confirm(row: InboxRow) {
+    if (row.kind !== "transfer" && row.kind !== "excluded" && !row.entityId) return;
     setRows((rs) => rs.filter((r) => r.id !== row.id));
     startTransition(() =>
       confirmAction([
@@ -119,7 +120,7 @@ export function Inbox({ rows: initial, entities }: { rows: InboxRow[]; entities:
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <p className="text-muted">
-          {rows.length} por revisar · <Kbd>j</Kbd>/<Kbd>k</Kbd> mover · letra = entidad · <Kbd>t</Kbd> transferencia ·{" "}
+          {rows.length + Math.max(0, totalCount - initial.length)} por revisar{totalCount > initial.length ? ` (mostrando ${rows.length})` : ""} · <Kbd>j</Kbd>/<Kbd>k</Kbd> mover · letra = entidad · <Kbd>t</Kbd> transferencia ·{" "}
           <Kbd>Enter</Kbd> confirmar
         </p>
         <button

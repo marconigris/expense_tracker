@@ -1,5 +1,5 @@
 import { requireOwner } from "@/lib/auth";
-import { asc, eq, ne } from "drizzle-orm";
+import { asc, eq, ne, sql } from "drizzle-orm";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { CATEGORIES } from "@/lib/catalog";
@@ -20,18 +20,20 @@ export default function ReviewPage() {
 async function Content() {
   await connection();
   await requireOwner();
-  const [rows, entities] = await Promise.all([
+  const [rows, entities, counts] = await Promise.all([
     db
       .select({ tx: t.transactions, account: t.accounts.name })
       .from(t.transactions)
       .leftJoin(t.accounts, eq(t.accounts.id, t.transactions.accountId))
       .where(ne(t.transactions.status, "confirmed"))
-      .orderBy(asc(t.transactions.confidence), asc(t.transactions.date))
+      .orderBy(sql`case when ${t.transactions.date} >= '2026-08-10' then 0 else 1 end`, asc(t.transactions.date), asc(t.transactions.confidence))
       .limit(500),
     db.select().from(t.entities).where(eq(t.entities.active, true)).orderBy(asc(t.entities.sortOrder)),
+    db.select({ n: sql<number>`count(*)::int` }).from(t.transactions).where(ne(t.transactions.status, "confirmed")),
   ]);
   return (
     <Inbox
+      totalCount={counts[0].n}
       rows={rows.map(({ tx, account }) => ({
         id: tx.id,
         date: tx.date,
