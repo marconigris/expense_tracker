@@ -5,6 +5,7 @@ import { db, t } from "../db";
 import type { Account } from "../db/schema";
 import { convert, ensureRates } from "../fx";
 import { parseCsv, type ParsedRow } from "./csv";
+import { wiseCashbackRecognitionDate } from "../recognition-date";
 
 export type ImportResult = {
   batchId: string | null;
@@ -131,6 +132,7 @@ export async function importRows(input: {
       .values({
         accountId: account.id,
         date: row.date,
+        recognitionDate: wiseCashbackRecognitionDate(account.slug, row.description, row.amount, row.date),
         description: row.description,
         amount: row.amount.toFixed(2),
         currency: account.currency,

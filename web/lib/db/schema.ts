@@ -97,6 +97,8 @@ export const transactions = pgTable(
     // Null when Moni records something she paid from her own accounts.
     accountId: uuid("account_id").references(() => accounts.id),
     date: date("date").notNull(),
+    // When income or expense was generated, if different from the bank posting date.
+    recognitionDate: date("recognition_date"),
     description: text("description").notNull(),
     // Signed, in the original currency: negative = money out.
     amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),

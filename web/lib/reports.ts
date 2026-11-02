@@ -44,10 +44,11 @@ async function allocationsFor(ids: string[]) {
 export async function monthlySummary(currency: Currency, months = 12) {
   const amount = currency === "USD" ? t.transactions.amountUsd : t.transactions.amountEur;
   const from = monthsAgo(months - 1);
+  const reportDate = sql<string>`coalesce(${t.transactions.recognitionDate}, ${t.transactions.date})::text`;
   const rows = await db
     .select({
       id: t.transactions.id,
-      date: t.transactions.date,
+      date: reportDate,
       entityId: t.transactions.entityId,
       original: t.transactions.amount,
       converted: amount,
@@ -57,7 +58,7 @@ export async function monthlySummary(currency: Currency, months = 12) {
       and(
         eq(t.transactions.status, "confirmed"),
         eq(t.transactions.kind, "normal"),
-        gte(t.transactions.date, from),
+        gte(reportDate, from),
         sql`${t.transactions.entityId} is not null`,
       ),
     );
