@@ -11,7 +11,6 @@ import { parsePartnerRevolut } from "@/lib/import/partner-revolut";
 import { isPartnerExpenseSpace, PARTNER_AREAS, partnerArea, partnerCsvKey, partnerSplit, validatePartnerExpense, type PartnerExpense } from "@/lib/partner-input";
 
 export type PartnerResult = { ok: boolean; message: string; requestId?: string };
-export type PreviewResult = { ok: boolean; message: string; source?: string; rows?: (PartnerExpense & { suggestedArea?: string })[]; skipped?: number };
 
 function safeMessage(error: unknown, fallback: string) {
   return error instanceof Error && /^(Revisá|Elegí|Indicá|Ingresá|Volvé|Falta la cotización|El archivo)/.test(error.message) ? error.message : fallback;
@@ -89,7 +88,7 @@ export async function addManualExpense(_previous: PartnerResult | null, form: Fo
   }
 }
 
-export async function previewPartnerCsv(_previous: PreviewResult | null, form: FormData): Promise<PreviewResult> {
+export async function uploadPartnerCsv(_previous: PartnerResult | null, form: FormData): Promise<PartnerResult> {
   const user = await requirePartner();
   const file = form.get("file");
   const source = String(form.get("source") ?? "").trim();
@@ -114,38 +113,54 @@ export async function previewPartnerCsv(_previous: PreviewResult | null, form: F
     } catch { skipped++; }
   }
   if (!rows.length) return { ok: false, message: parsed.errors[0] ?? "No encontré gastos compatibles en el archivo." };
-  const previous = await db.select({ description: t.partnerExpenses.description, area: t.partnerExpenses.area }).from(t.partnerExpenses)
-    .where(eq(t.partnerExpenses.userId, user.id));
-  const areas = new Map<string, Set<string>>();
-  for (const item of previous) {
-    if (!Object.hasOwn(PARTNER_AREAS, item.area)) continue;
-    const key = item.description.trim().toLocaleLowerCase("es");
-    const known = areas.get(key) ?? new Set<string>();
-    known.add(item.area); areas.set(key, known);
-  }
-  return { ok: true, message: "Elegí los gastos que quieras cargar.", source, rows: rows.map((row) => {
-    const known = areas.get(row.description.trim().toLocaleLowerCase("es"));
-    return known?.size === 1 ? { ...row, suggestedArea: [...known][0] } : row;
-  }), skipped };
+  const keyed = rows.map((row) => ({ row, key: partnerCsvKey(user.id, source, row) }));
+  const saved = new Set((await db.select({ key: t.partnerExpenses.dedupeKey }).from(t.partnerExpenses)
+    .where(inArray(t.partnerExpenses.dedupeKey, keyed.map((r) => r.key)))).map((r) => r.key));
+  const fresh = keyed.filter((r) => !saved.has(r.key));
+  const inserted = fresh.length ? await db.insert(t.partnerImportRows).values(fresh.map(({ row, key }) => ({
+    userId: user.id, source, date: row.date, description: row.description, amount: row.amount.toFixed(2), currency: row.currency,
+    reference: row.reference ?? null, occurrence: row.occurrence, dedupeKey: key,
+  }))).onConflictDoNothing({ target: t.partnerImportRows.dedupeKey }).returning({ id: t.partnerImportRows.id }) : [];
+  revalidatePath("/compartido/importar");
+  const already = rows.length - inserted.length;
+  return { ok: true, requestId: randomUUID(), message: [`${inserted.length} movimientos nuevos para revisar`,
+    already ? `${already} ya estaban importados` : "", skipped ? `${skipped} filas omitidas (ingresos o no compatibles)` : ""].filter(Boolean).join(" · ") + "." };
 }
 
-export async function importPartnerCsv(_previous: PartnerResult | null, form: FormData): Promise<PartnerResult> {
+function rowIds(ids: unknown) {
+  if (!Array.isArray(ids) || !ids.length || ids.length > 500 || !ids.every((id) => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id))) throw new Error("Elegí entre 1 y 500 gastos.");
+  return ids as string[];
+}
+
+export async function savePartnerRows(input: { ids: string[]; area: string; percent: number }): Promise<PartnerResult> {
   const user = await requirePartner();
   try {
-    const source = String(form.get("source") ?? "").trim();
-    if (!source || source.length > 100) throw new Error("Indicá el banco o tarjeta.");
-    const selected = form.getAll("row");
-    if (!selected.length || selected.length > 500) throw new Error("Elegí al menos un gasto compartido.");
-    const rows = selected.map((value) => {
-      const raw = JSON.parse(String(value)) as PartnerExpense;
-      const expense = validatePartnerExpense(raw);
-      return { expense, key: partnerCsvKey(user.id, source, expense), source };
-    });
-    if (new Set(rows.map((r) => r.key)).size !== rows.length) throw new Error("El archivo contiene selecciones repetidas.");
-    const count = await addExpenses(user.id, String(form.get("area") ?? ""), formPercent(form.get("percent")), rows);
-    return { ok: true, message: `${count} gastos guardados · ${rows.length - count} ya estaban cargados.`, requestId: randomUUID() };
+    const ids = rowIds(input.ids);
+    const percent = formPercent(String(input.percent));
+    const pending = await db.select().from(t.partnerImportRows)
+      .where(and(eq(t.partnerImportRows.userId, user.id), eq(t.partnerImportRows.status, "pending"), inArray(t.partnerImportRows.id, ids)));
+    if (!pending.length) throw new Error("Elegí al menos un gasto.");
+    const rows = pending.map((r) => ({ key: r.dedupeKey, source: r.source,
+      expense: validatePartnerExpense({ date: r.date, description: r.description, amount: Number(r.amount), currency: r.currency, reference: r.reference ?? undefined, occurrence: r.occurrence }) }));
+    const count = await addExpenses(user.id, input.area, percent, rows);
+    await db.delete(t.partnerImportRows).where(and(eq(t.partnerImportRows.userId, user.id), inArray(t.partnerImportRows.id, pending.map((r) => r.id))));
+    revalidatePath("/compartido/importar");
+    return { ok: true, message: `${count} gastos guardados${rows.length - count ? ` · ${rows.length - count} ya estaban cargados` : ""}.` };
   } catch (error) {
-    return { ok: false, message: safeMessage(error, "No pudimos importar los gastos. Probá de nuevo.") };
+    return { ok: false, message: safeMessage(error, "No pudimos guardar los gastos. Probá de nuevo.") };
+  }
+}
+
+/** Discarded rows stay hidden, also when the same CSV is imported again; restoring puts them back in review. */
+export async function setPartnerRowsDiscarded(ids: string[], discarded: boolean): Promise<PartnerResult> {
+  const user = await requirePartner();
+  try {
+    await db.update(t.partnerImportRows).set({ status: discarded ? "discarded" : "pending" })
+      .where(and(eq(t.partnerImportRows.userId, user.id), inArray(t.partnerImportRows.id, rowIds(ids))));
+    revalidatePath("/compartido/importar");
+    return { ok: true, message: discarded ? "Descartado." : "Vuelve a revisión." };
+  } catch (error) {
+    return { ok: false, message: safeMessage(error, "No pudimos actualizar el movimiento.") };
   }
 }
 

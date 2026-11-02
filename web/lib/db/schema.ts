@@ -160,6 +160,23 @@ export const partnerExpenses = pgTable("partner_expenses", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("partner_expense_key_idx").on(t.dedupeKey), uniqueIndex("partner_expense_transaction_idx").on(t.transactionId), index("partner_expense_user_date_idx").on(t.userId, t.date)]);
 
+// Rows from Moni's CSVs waiting for her decision. Saved rows move to partner_expenses (same dedupe key);
+// discarded ones stay here so re-importing the file does not bring them back.
+export const partnerImportRows = pgTable("partner_import_rows", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  source: text("source").notNull(),
+  date: date("date").notNull(),
+  description: text("description").notNull(),
+  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(), // positive = spent
+  currency: text("currency").notNull(),
+  reference: text("reference"),
+  occurrence: integer("occurrence").notNull().default(0),
+  status: text("status", { enum: ["pending", "discarded"] }).notNull().default("pending"),
+  dedupeKey: text("dedupe_key").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("partner_import_key_idx").on(t.dedupeKey), index("partner_import_user_idx").on(t.userId, t.status, t.date)]);
+
 // Learned from confirmations: "description contains X" -> entity/category.
 export const rules = pgTable("rules", {
   id: uuid("id").primaryKey().defaultRandom(),
