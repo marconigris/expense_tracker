@@ -5,6 +5,9 @@ on:
     - cron: "0 */10 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   nudge:
     runs-on: ubuntu-latest
@@ -21,7 +24,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Create empty commit
-        run: git commit --allow-empty -m "keepalive: prevent streamlit hibernation"
+        run: |
+          git commit --allow-empty -m "keepalive: prevent streamlit hibernation"
 
       - name: Push empty commit
         run: git push
