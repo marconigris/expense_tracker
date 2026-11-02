@@ -13,6 +13,8 @@ export const metadata: Metadata = {
 
 const NAV = [
   { href: "/", label: "Resumen" },
+  { href: "/patrimonio", label: "Patrimonio" },
+  { href: "/moni", label: "Moni" },
   { href: "/revisar", label: "Revisar" },
   { href: "/importar", label: "Importar" },
 ];
@@ -22,7 +24,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="es" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full font-sans">
         <header className="border-b border-line bg-card">
-          <nav className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3 text-sm">
+          <nav className="mx-auto flex max-w-5xl items-center gap-4 overflow-x-auto whitespace-nowrap px-4 py-3 text-sm">
             <span className="font-semibold">Finanzas</span>
             {NAV.map((n) => (
               <Link key={n.href} href={n.href} className="text-muted hover:text-fg">
