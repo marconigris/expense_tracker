@@ -47,7 +47,7 @@ const REVOLUT_HINT =
 export const ACCOUNTS: AccountSeed[] = [
   { slug: "revolut-eur", name: "Revolut EUR", institution: "Revolut", currency: "EUR", kind: "bank", defaultEntity: "personal", hint: REVOLUT_HINT },
   { slug: "revolut-usd", name: "Revolut USD", institution: "Revolut", currency: "USD", kind: "bank", defaultEntity: "personal", hint: REVOLUT_HINT },
-  { slug: "revolut-zar", name: "Revolut ZAR", institution: "Revolut", currency: "ZAR", kind: "bank", defaultEntity: "personal", hint: REVOLUT_HINT },
+  { slug: "revolut-zar", name: "Revolut ZAR", institution: "Revolut", currency: "ZAR", kind: "bank", defaultEntity: "personal", hint: REVOLUT_HINT, active: false },
   { slug: "revolut-ahorro-eur", name: "Revolut Ahorro EUR", institution: "Revolut", currency: "EUR", kind: "savings", defaultEntity: "inversiones" },
   { slug: "revolut-ahorro-usd", name: "Revolut Ahorro USD", institution: "Revolut", currency: "USD", kind: "savings", defaultEntity: "inversiones" },
   { slug: "revolut-pro", name: "Revolut Pro", institution: "Revolut", currency: "EUR", kind: "bank", defaultEntity: null, hint: "Cuenta mixta: cobros de coaching, clientes de Moni y fondos de Bora Vida; revisar cada operación." },
