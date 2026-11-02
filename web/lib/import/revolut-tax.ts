@@ -52,6 +52,13 @@ export function parseRevolutTaxReport(text: string): TaxReport | null {
       continue;
     }
     if (area === "crypto" && /^\d{2}\.\d{2}\.\d{2}$/.test(head)) { cryptoSales++; continue; }
+    if (head === "Total" && area === "funds" && current && groups.has(current)) {
+      const group = groups.get(current)!;
+      const reported = parseAmount(row[group.currency === "EUR" ? 6 : 10]);
+      const sum = group.rows.reduce((n, r) => n + cents(r.amount), 0);
+      if (reported == null || cents(reported) !== sum) errors.push(`${group.slug}: total de rendimientos no concilia`);
+      continue;
+    }
     const date = dateValue(head);
     if (!date || !current) continue;
     const group = groups.get(current);
@@ -75,9 +82,9 @@ export function parseRevolutTaxReport(text: string): TaxReport | null {
     }
   }
   for (const group of groups.values()) {
-    if (["revolut-eur", "revolut-usd", "revolut-zar", "revolut-pro", "revolut-pro-usd"].includes(group.slug) && group.rows.length && group.closing !== undefined) {
+    if (["revolut-eur", "revolut-usd", "revolut-zar", "revolut-pro", "revolut-pro-usd"].includes(group.slug) && group.rows.length) {
       const sum = group.rows.reduce((n, r) => n + cents(r.amount), 0);
-      if (group.opening === undefined || cents(group.opening) + sum !== cents(group.closing)) errors.push(`${group.slug}: saldo final no concilia`);
+      if (group.opening === undefined || group.closing === undefined || cents(group.opening) + sum !== cents(group.closing)) errors.push(`${group.slug}: saldo final no concilia`);
     }
   }
   return { groups: [...groups.values()].filter((g) => g.rows.length), errors, cryptoSales };

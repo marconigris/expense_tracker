@@ -23,7 +23,7 @@ async function main() {
     .where(and(eq(t.rules.pattern, "udemy"), eq(t.rules.kind, "normal")));
 
   for (const [i, { defaultEntity, ...a }] of ACCOUNTS.entries()) {
-    const values = { ...a, defaultEntityId: entityIds[defaultEntity], sortOrder: i };
+    const values = { ...a, defaultEntityId: defaultEntity ? entityIds[defaultEntity] : null, sortOrder: i };
     await db.insert(t.accounts).values(values).onConflictDoUpdate({ target: t.accounts.slug, set: values });
   }
 

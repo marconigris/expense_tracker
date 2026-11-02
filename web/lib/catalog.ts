@@ -35,13 +35,13 @@ type AccountSeed = {
   institution: string;
   currency: string;
   kind: "bank" | "savings" | "broker" | "cash" | "crypto";
-  defaultEntity: string;
+  defaultEntity: string | null;
   hint?: string;
   active?: boolean;
 };
 
 const REVOLUT_HINT =
-  "Cuenta comodín: gastos personales y de los hogares (Europa, Cabarete, Brasil); entran cobros de clientes de coaching de Europa y a veces se pagan gastos de coaching.";
+  "Cuenta de uso mixto: movimientos personales, compartidos, de coaching y Adventure Planning. Revisar quién corresponde a cada operación.";
 
 export const ACCOUNTS: AccountSeed[] = [
   { slug: "revolut-eur", name: "Revolut EUR", institution: "Revolut", currency: "EUR", kind: "bank", defaultEntity: "personal", hint: REVOLUT_HINT },
@@ -49,8 +49,8 @@ export const ACCOUNTS: AccountSeed[] = [
   { slug: "revolut-zar", name: "Revolut ZAR", institution: "Revolut", currency: "ZAR", kind: "bank", defaultEntity: "personal", hint: REVOLUT_HINT },
   { slug: "revolut-ahorro-eur", name: "Revolut Ahorro EUR", institution: "Revolut", currency: "EUR", kind: "savings", defaultEntity: "inversiones" },
   { slug: "revolut-ahorro-usd", name: "Revolut Ahorro USD", institution: "Revolut", currency: "USD", kind: "savings", defaultEntity: "inversiones" },
-  { slug: "revolut-pro", name: "Revolut Pro", institution: "Revolut", currency: "EUR", kind: "bank", defaultEntity: "coaching", hint: "Links de pago: cobros de clientes de coaching." },
-  { slug: "revolut-pro-usd", name: "Revolut Pro USD", institution: "Revolut", currency: "USD", kind: "bank", defaultEntity: "coaching", hint: "Cuenta Pro en dólares para actividad de coaching." },
+  { slug: "revolut-pro", name: "Revolut Pro", institution: "Revolut", currency: "EUR", kind: "bank", defaultEntity: null, hint: "Cuenta mixta: cobros de coaching, clientes de Moni y fondos de Bora Vida; revisar cada operación." },
+  { slug: "revolut-pro-usd", name: "Revolut Pro USD", institution: "Revolut", currency: "USD", kind: "bank", defaultEntity: null, hint: "Cuenta Pro en dólares: revisar la titularidad y el negocio de cada operación." },
   { slug: "brubank-ars", name: "Brubank ARS", institution: "Brubank", currency: "ARS", kind: "bank", defaultEntity: "coaching", hint: "Cobros de coaching de clientes de Argentina, impuestos y trainings del negocio, algunos pagos en Brasil." },
   { slug: "brubank-usd", name: "Brubank USD", institution: "Brubank", currency: "USD", kind: "bank", defaultEntity: "coaching", hint: "Cobros de coaching de clientes de Argentina en dólares." },
   { slug: "arq-ars", name: "ARQ ARS", institution: "ARQ", currency: "ARS", kind: "bank", defaultEntity: "personal", hint: "Cuenta en pesos de Garpa, con recargas y retiros entre cuentas propias y conversiones a USDc." },
