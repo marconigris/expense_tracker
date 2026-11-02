@@ -14,33 +14,37 @@ export function recordedBalance(movements: Movement[], snapshots: Snapshot[]) {
     date: relevant.map((m) => m.date).sort().at(-1) ?? from, source: "opening" as const, notes: null, later: false };
 }
 
-type Money = { currency: string; value: number | null };
-export type WealthBucket = { accounts: number; properties: number; custody: number; total: number; converted: { currency: string; amount: number }[] };
+export type WealthGroup = "cash" | "stocks";
+type Money = { currency: string; value: number | null; group: WealthGroup };
+export type WealthBucket = { cash: number; stocks: number; properties: number; total: number; converted: { currency: string; amount: number }[] };
+
+/** Only IBKR holds stocks and funds; banks, money market, Cocos and crypto can be withdrawn quickly. */
+export function wealthGroup(account: { slug: string }): WealthGroup {
+  return account.slug.startsWith("ibkr") ? "stocks" : "cash";
+}
 
 /**
- * Marco's net worth in two buckets that are never mixed: EUR stays in EUR, every other currency is
- * converted to USD with `usdPerUnit`. Dad's custody is subtracted; property stakes count in their currency.
+ * Marco's wealth in two buckets that are never mixed: EUR stays in EUR, every other currency is converted to USD
+ * with `usdPerUnit`. Balances are gross: money held for others is shown elsewhere, not subtracted here.
  */
-export function wealthTotals(accounts: Money[], custody: { currency: string; balance: number }[], properties: { stake: number; stakeCurrency: string }[],
-  usdPerUnit: Record<string, number | null>) {
-  const usd: WealthBucket = { accounts: 0, properties: 0, custody: 0, total: 0, converted: [] };
-  const eur: WealthBucket = { accounts: 0, properties: 0, custody: 0, total: 0, converted: [] };
+export function wealthTotals(accounts: Money[], properties: { stake: number; stakeCurrency: string }[], usdPerUnit: Record<string, number | null>) {
+  const usd: WealthBucket = { cash: 0, stocks: 0, properties: 0, total: 0, converted: [] };
+  const eur: WealthBucket = { cash: 0, stocks: 0, properties: 0, total: 0, converted: [] };
   const missingRates = new Set<string>();
   let hasEur = false;
-  const add = (currency: string, amount: number, field: "accounts" | "properties" | "custody") => {
+  const add = (currency: string, amount: number, field: WealthGroup | "properties") => {
     if (!amount) return;
     if (currency === "EUR") { hasEur = true; eur[field] += amount; return; }
     const rate = currency === "USD" ? 1 : usdPerUnit[currency];
     if (rate == null) { missingRates.add(currency); return; }
     usd[field] += amount * rate;
-    if (currency !== "USD" && field === "accounts") {
+    if (currency !== "USD" && field !== "properties") {
       const item = usd.converted.find((c) => c.currency === currency);
       if (item) item.amount += amount; else usd.converted.push({ currency, amount });
     }
   };
-  for (const a of accounts) if (a.value != null) add(a.currency, a.value, "accounts");
+  for (const a of accounts) if (a.value != null) add(a.currency, a.value, a.group);
   for (const p of properties) add(p.stakeCurrency, p.stake, "properties");
-  for (const c of custody) add(c.currency, c.balance, "custody");
-  for (const b of [usd, eur]) b.total = b.accounts + b.properties - b.custody;
+  for (const b of [usd, eur]) b.total = b.cash + b.stocks + b.properties;
   return { usd, eur: hasEur ? eur : null, missingRates: [...missingRates] };
 }

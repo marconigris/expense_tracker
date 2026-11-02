@@ -14,7 +14,7 @@ async function Content() {
   await requireOwner();
   const { items, otherAccounts, custody, properties, totals, missing } = await wealthView();
   return <div className="space-y-5">
-    <div><h1 className="text-lg font-semibold">Patrimonio</h1><p className="text-sm text-muted">Tus cuentas y tu parte de las propiedades, sin la plata de tu papá</p></div>
+    <div><h1 className="text-lg font-semibold">Patrimonio</h1><p className="text-sm text-muted">Saldo bruto de tus cuentas y tu parte de las propiedades</p></div>
     <div className={`grid gap-4 ${totals.eur ? "md:grid-cols-2" : ""}`}>
       <Bubble currency="USD" bucket={totals.usd} />
       {totals.eur && <Bubble currency="EUR" bucket={totals.eur} />}
@@ -48,18 +48,28 @@ async function Content() {
   </div>;
 }
 
+const GROUPS = [
+  { key: "cash", label: "Cash", tag: "Líquido", hint: "Bancos, money market, Cocos, cripto", tone: "bg-white" },
+  { key: "stocks", label: "Stocks / Fondos", tag: "Inversión", hint: "IBKR", tone: "bg-white/55" },
+  { key: "properties", label: "Propiedades", tag: "Ilíquido", hint: "Tu parte del capital aportado", tone: "bg-white/25" },
+] as const;
+
 function Bubble({ currency, bucket }: { currency: string; bucket: WealthBucket }) {
-  const lines = [
-    ["Cuentas", bucket.accounts],
-    ["Propiedades", bucket.properties],
-    ["Plata de papá", -bucket.custody],
-  ].filter(([, v]) => v !== 0) as [string, number][];
+  // USD always shows the three groups so an empty one (e.g. IBKR without a balance) is visible.
+  const groups = GROUPS.filter((g) => currency === "USD" || bucket[g.key] !== 0);
+  const positive = groups.reduce((sum, g) => sum + Math.max(0, bucket[g.key]), 0);
   return <section className="hero rounded-2xl p-5">
     <p className="text-sm opacity-80">Patrimonio en {currency}</p>
     <p className="mt-1 text-3xl font-semibold tabular-nums">{formatMoney(bucket.total, currency)}</p>
-    <div className="mt-3 space-y-0.5 text-sm opacity-90">
-      {lines.map(([label, value]) => <div key={label} className="flex justify-between gap-3"><span>{label}</span><span className="tabular-nums">{value < 0 ? "−" : ""}{formatMoney(Math.abs(value), currency)}</span></div>)}
+    {positive > 0 && <div className="mt-4 flex h-2 gap-0.5 overflow-hidden rounded-full bg-white/10">
+      {groups.map((g) => <div key={g.key} className={g.tone} style={{ width: `${(Math.max(0, bucket[g.key]) / positive) * 100}%` }} />)}
+    </div>}
+    <div className="mt-3 space-y-2">
+      {groups.map((g) => <div key={g.key} className="flex items-start justify-between gap-3 text-sm">
+        <span className="flex items-start gap-2"><span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${g.tone}`} /><span><span className="flex items-center gap-2 font-medium">{g.label}<span className="rounded-full border border-white/30 px-1.5 text-[10px] font-normal uppercase tracking-wide opacity-80">{g.tag}</span></span><span className="block text-xs opacity-70">{g.hint}</span></span></span>
+        <span className="tabular-nums">{formatMoney(bucket[g.key], currency)}</span>
+      </div>)}
     </div>
-    {bucket.converted.length > 0 && <p className="mt-2 text-xs opacity-70">Incluye {bucket.converted.map((c) => `${formatMoney(c.amount, c.currency)} ${c.currency}`).join(" · ")} pasados a USD a la cotización de hoy.</p>}
+    {bucket.converted.length > 0 && <p className="mt-3 text-xs opacity-70">Incluye {bucket.converted.map((c) => `${formatMoney(c.amount, c.currency)} ${c.currency}`).join(" · ")} pasados a USD a la cotización de hoy.</p>}
   </section>;
 }

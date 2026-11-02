@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { db, t } from "./db";
 import { custodyBalances, propertyYields } from "./reports";
 import { ensureRates, shiftDate, usdPerUnit } from "./fx";
-import { recordedBalance, wealthTotals } from "./wealth-math";
+import { recordedBalance, wealthGroup, wealthTotals } from "./wealth-math";
 
 /** Snapshots and account statements are gross balances. Unknown openings stay unknown. */
 export async function wealthView() {
@@ -20,11 +20,11 @@ export async function wealthView() {
   });
   const withData = items.filter((a) => a.value != null || movements.some((m) => m.accountId === a.id));
   const today = new Date().toISOString().slice(0, 10);
-  const foreign = [...new Set([...items.filter((a) => a.value).map((a) => a.currency), ...custody.map((c) => c.currency)])].filter((c) => c !== "USD" && c !== "EUR");
+  const foreign = [...new Set(items.filter((a) => a.value).map((a) => a.currency))].filter((c) => c !== "USD" && c !== "EUR");
   // Fresh rates are best effort: without network the latest stored rate is used.
   await ensureRates(foreign, shiftDate(today, -7), today).catch(() => undefined);
   const rates = Object.fromEntries(await Promise.all(foreign.map(async (c) => [c, await usdPerUnit(c, today)] as const)));
-  const totals = wealthTotals(items, custody.map((c) => ({ currency: c.currency, balance: Number(c.balance) })), properties, rates);
+  const totals = wealthTotals(items.map((a) => ({ currency: a.currency, value: a.value, group: wealthGroup(a) })), properties, rates);
   const missing = items.filter((a) => a.value == null);
   return { items: withData, otherAccounts: items.filter((a) => !withData.includes(a)), custody, properties, totals, missing };
 }
