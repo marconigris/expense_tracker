@@ -7,6 +7,8 @@ export type ParsedRow = {
   currency?: string; // when the file mixes currencies (Revolut, Wise)
   product?: string; // Revolut "Current" / "Savings" / "Deposit"
   reference?: string; // bank transaction identifier, when available
+  sourceAmountEur?: number; // EUR equivalent supplied in a consolidated statement
+  sourceCategory?: string; // original statement category
 };
 
 const norm = (s: string) =>

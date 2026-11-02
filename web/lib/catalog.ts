@@ -46,9 +46,11 @@ const REVOLUT_HINT =
 export const ACCOUNTS: AccountSeed[] = [
   { slug: "revolut-eur", name: "Revolut EUR", institution: "Revolut", currency: "EUR", kind: "bank", defaultEntity: "personal", hint: REVOLUT_HINT },
   { slug: "revolut-usd", name: "Revolut USD", institution: "Revolut", currency: "USD", kind: "bank", defaultEntity: "personal", hint: REVOLUT_HINT },
+  { slug: "revolut-zar", name: "Revolut ZAR", institution: "Revolut", currency: "ZAR", kind: "bank", defaultEntity: "personal", hint: REVOLUT_HINT },
   { slug: "revolut-ahorro-eur", name: "Revolut Ahorro EUR", institution: "Revolut", currency: "EUR", kind: "savings", defaultEntity: "inversiones" },
   { slug: "revolut-ahorro-usd", name: "Revolut Ahorro USD", institution: "Revolut", currency: "USD", kind: "savings", defaultEntity: "inversiones" },
   { slug: "revolut-pro", name: "Revolut Pro", institution: "Revolut", currency: "EUR", kind: "bank", defaultEntity: "coaching", hint: "Links de pago: cobros de clientes de coaching." },
+  { slug: "revolut-pro-usd", name: "Revolut Pro USD", institution: "Revolut", currency: "USD", kind: "bank", defaultEntity: "coaching", hint: "Cuenta Pro en dólares para actividad de coaching." },
   { slug: "brubank-ars", name: "Brubank ARS", institution: "Brubank", currency: "ARS", kind: "bank", defaultEntity: "coaching", hint: "Cobros de coaching de clientes de Argentina, impuestos y trainings del negocio, algunos pagos en Brasil." },
   { slug: "brubank-usd", name: "Brubank USD", institution: "Brubank", currency: "USD", kind: "bank", defaultEntity: "coaching", hint: "Cobros de coaching de clientes de Argentina en dólares." },
   { slug: "arq-ars", name: "ARQ ARS", institution: "ARQ", currency: "ARS", kind: "bank", defaultEntity: "personal", hint: "Cuenta en pesos de Garpa, con recargas y retiros entre cuentas propias y conversiones a USDc." },

@@ -6,6 +6,8 @@ import type { Account } from "../db/schema";
 import { convert, ensureRates } from "../fx";
 import { parseCsv, type ParsedRow } from "./csv";
 import { wiseCashbackRecognitionDate } from "../recognition-date";
+import { parseRevolutTaxReport } from "./revolut-tax";
+import { importRevolutTax } from "./revolut-tax-import";
 
 export type ImportResult = {
   batchId: string | null;
@@ -34,7 +36,10 @@ export async function importStatement(input: { accountId: string; filename: stri
   if (input.filename.toLowerCase().endsWith(".pdf")) {
     return { batchId: null, format: "pdf", imported: 0, duplicates: 0, errors: ["Los PDF se importan desde la Mac con: npm run codex:pdf"] };
   }
-  const { rows, format, errors } = parseCsv(input.data.toString("utf8"));
+  const contents = input.data.toString("utf8");
+  const taxReport = parseRevolutTaxReport(contents);
+  if (taxReport) return importRevolutTax(taxReport, input.filename, input.accountId);
+  const { rows, format, errors } = parseCsv(contents);
   return importRows({ accountId: input.accountId, filename: input.filename, format, rows, errors });
 }
 
