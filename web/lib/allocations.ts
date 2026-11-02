@@ -41,6 +41,14 @@ export function custodyAmount(original: number, isCustody: boolean, allocations:
   return allocations.filter((a) => a.owner === "papa").reduce((sum, a) => sum + Number(a.amount), 0);
 }
 
+export type CustodyForm = "cash" | "bank";
+
+/** How dad's money has to be returned: cash he handed over (or moved through a cash account) versus bank money. */
+export function custodyForm(accountKind: string | null, description: string): CustodyForm {
+  if (accountKind) return accountKind === "cash" ? "cash" : "bank";
+  return /efectivo|\bcash\b/i.test(description) ? "cash" : "bank";
+}
+
 /** Historical shared movements before this date do not create a Moni settlement. */
 export function isMoniSettlementDate(date: string): boolean {
   return date >= MONI_SETTLEMENT_START;

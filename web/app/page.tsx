@@ -121,8 +121,8 @@ async function Dashboard({ searchParams }: Pick<PageProps<"/">, "searchParams">)
         <section className="rounded-xl border border-line bg-card p-4 text-sm">
           <h2 className="mb-2 font-medium">Plata de papá que custodiás</h2>
           {custody.map((c) => (
-            <div key={c.currency} className="flex justify-between py-1">
-              <span className="text-muted">{c.currency}</span>
+            <div key={`${c.currency}:${c.form}`} className="flex justify-between py-1">
+              <span className="text-muted">{c.form === "cash" ? "Efectivo" : "Banco"} {c.currency}</span>
               <span className="tabular-nums">{formatMoney(Number(c.balance), c.currency)}</span>
             </div>
           ))}

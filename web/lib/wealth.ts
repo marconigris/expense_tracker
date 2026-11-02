@@ -20,11 +20,11 @@ export async function wealthView() {
   });
   const withData = items.filter((a) => a.value != null || movements.some((m) => m.accountId === a.id));
   const today = new Date().toISOString().slice(0, 10);
-  const foreign = [...new Set(items.filter((a) => a.value).map((a) => a.currency))].filter((c) => c !== "USD" && c !== "EUR");
+  const foreign = [...new Set([...items.filter((a) => a.value).map((a) => a.currency), ...custody.map((c) => c.currency)])].filter((c) => c !== "USD" && c !== "EUR");
   // Fresh rates are best effort: without network the latest stored rate is used.
   await ensureRates(foreign, shiftDate(today, -7), today).catch(() => undefined);
   const rates = Object.fromEntries(await Promise.all(foreign.map(async (c) => [c, await usdPerUnit(c, today)] as const)));
-  const totals = wealthTotals(items.map((a) => ({ currency: a.currency, value: a.value, group: wealthGroup(a) })), properties, rates);
+  const totals = wealthTotals(items.map((a) => ({ currency: a.currency, value: a.value, group: wealthGroup(a) })), properties, rates, custody);
   const missing = items.filter((a) => a.value == null);
   return { items: withData, otherAccounts: items.filter((a) => !withData.includes(a)), custody, properties, totals, missing };
 }

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { recordedBalance } from "../lib/wealth-math";
+import { custodyForm } from "../lib/allocations";
 
 const movement = { date: "2026-01-02", amount: "-15.00", kind: "normal", status: "confirmed", batchId: "batch" };
 test("missing openings are unknown, never a sum presented as a balance", () => {
@@ -17,21 +18,23 @@ test("a snapshot stays dated and is not silently rolled forward", () => {
   assert.equal(result.later, true);
   assert.equal(result.date, "2026-01-01");
 });
-import { wealthGroup, wealthTotals } from "../lib/wealth-math";
+import { groupAccounts, wealthGroup, wealthTotals } from "../lib/wealth-math";
 
-test("EUR stays apart, other currencies go to USD, IBKR is stocks, and nothing is subtracted", () => {
+test("EUR stays apart, other currencies go to USD, IBKR is stocks, and dad's custody is subtracted", () => {
   const accounts = [
     { currency: "USD", value: 1000, group: "cash" as const }, { currency: "USDC", value: 500, group: "cash" as const },
     { currency: "ARS", value: 150000, group: "cash" as const }, { currency: "USD", value: 4000, group: "stocks" as const },
     { currency: "EUR", value: 2000, group: "cash" as const }, { currency: "ZAR", value: 0, group: "cash" as const },
     { currency: "USD", value: null, group: "cash" as const },
   ];
-  const result = wealthTotals(accounts, [{ stake: 60000, stakeCurrency: "USD" }], { USDC: 1, ARS: 0.001 });
+  const result = wealthTotals(accounts, [{ stake: 60000, stakeCurrency: "USD" }], { USDC: 1, ARS: 0.001 },
+    [{ currency: "USD", balance: 300 }, { currency: "USD", balance: 200 }, { currency: "EUR", balance: 500 }]);
   assert.equal(result.usd.cash, 1650);
   assert.equal(result.usd.stocks, 4000);
-  assert.equal(result.usd.total, 1650 + 4000 + 60000);
+  assert.equal(result.usd.custody, 500);
+  assert.equal(result.usd.total, 1650 + 4000 + 60000 - 500);
   assert.deepEqual(result.usd.converted, [{ currency: "USDC", amount: 500 }, { currency: "ARS", amount: 150000 }]);
-  assert.equal(result.eur?.total, 2000);
+  assert.equal(result.eur?.total, 1500);
   assert.deepEqual(result.missingRates, []);
 });
 
@@ -45,4 +48,27 @@ test("only IBKR counts as stocks and funds", () => {
   assert.equal(wealthGroup({ slug: "ibkr" }), "stocks");
   assert.equal(wealthGroup({ slug: "cocos-fci-dolares-plus" }), "cash");
   assert.equal(wealthGroup({ slug: "revolut-ahorro-usd" }), "cash");
+});
+
+test("accounts group by region and bank, sorted by name", () => {
+  const accounts = [
+    { institution: "Revolut", name: "Revolut USD", currency: "USD" }, { institution: "Efectivo", name: "Efectivo USD", currency: "USD" },
+    { institution: "Cocos", name: "Cocos USD", currency: "USD" }, { institution: "Binance", name: "Binance", currency: "USDT" },
+    { institution: "Bunq", name: "Bunq Ahorro EUR", currency: "EUR" }, { institution: "Revolut", name: "Revolut Ahorro EUR", currency: "EUR" },
+    { institution: "ARQ", name: "ARQ USDc", currency: "USDC" }, { institution: "Wise", name: "Wise USD", currency: "USD" },
+  ];
+  assert.deepEqual(groupAccounts(accounts).map((g) => [g.region, g.banks.map((b) => [b.bank, b.accounts.map((a) => a.name)])]), [
+    ["Europa EUR", [["Bunq", ["Bunq Ahorro EUR"]], ["Revolut", ["Revolut Ahorro EUR"]]]],
+    ["Europa USD", [["Revolut", ["Revolut USD"]], ["Wise", ["Wise USD"]]]],
+    ["Argentina", [["ARQ", ["ARQ USDc"]], ["Cocos", ["Cocos USD"]]]],
+    ["Crypto", [["Binance", ["Binance"]]]],
+    ["Efectivo", [["Efectivo", ["Efectivo USD"]]]],
+  ]);
+});
+
+test("dad's money is cash when it came as cash or passed through a cash account", () => {
+  assert.equal(custodyForm(null, "Saldo inicial papá: efectivo USD"), "cash");
+  assert.equal(custodyForm(null, "Saldo inicial papá: banco USD"), "bank");
+  assert.equal(custodyForm("cash", "Pago intereses"), "cash");
+  assert.equal(custodyForm("bank", "Card transaction efectivo"), "bank");
 });

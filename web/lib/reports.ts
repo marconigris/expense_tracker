@@ -1,5 +1,5 @@
 import { and, eq, gt, gte, inArray, ne, sql } from "drizzle-orm";
-import { custodyAmount, marcoReportedAmount, type OwnershipAllocation } from "./allocations";
+import { custodyAmount, custodyForm, marcoReportedAmount, type CustodyForm, type OwnershipAllocation } from "./allocations";
 import { db, t } from "./db";
 import type { Entity } from "./db/schema";
 
@@ -111,17 +111,25 @@ export async function monthlySummary(currency: Currency, months = 12) {
 /** Balance of dad's money held by Marco, per currency. */
 export async function custodyBalances() {
   const rows = await db
-    .select({ id: t.transactions.id, currency: t.transactions.currency, amount: t.transactions.amount, entityKind: t.entities.kind })
+    .select({ id: t.transactions.id, currency: t.transactions.currency, amount: t.transactions.amount, entityKind: t.entities.kind,
+      description: t.transactions.description, accountKind: t.accounts.kind })
     .from(t.transactions)
     .leftJoin(t.entities, eq(t.entities.id, t.transactions.entityId))
+    .leftJoin(t.accounts, eq(t.accounts.id, t.transactions.accountId))
     .where(and(eq(t.transactions.status, "confirmed"), inArray(t.transactions.kind, ["normal", "opening", "settlement"])));
   const allocations = await allocationsFor(rows.map((r) => r.id));
-  const totals = new Map<string, number>();
+  const totals = new Map<string, { currency: string; form: CustodyForm; balance: number }>();
   for (const row of rows) {
     const value = custodyAmount(Number(row.amount), row.entityKind === "custody", allocations.get(row.id) ?? []);
-    if (value !== 0) totals.set(row.currency, (totals.get(row.currency) ?? 0) + value);
+    if (value === 0) continue;
+    const form = custodyForm(row.accountKind, row.description);
+    const item = totals.get(`${row.currency}:${form}`) ?? { currency: row.currency, form, balance: 0 };
+    item.balance += value;
+    totals.set(`${row.currency}:${form}`, item);
   }
-  return [...totals].map(([currency, balance]) => ({ currency, balance }));
+  // USD before EUR, cash before bank; rounding to cents avoids float noise in the sums.
+  return [...totals.values()].map((c) => ({ ...c, balance: Math.round(c.balance * 100) / 100 }))
+    .sort((a, b) => b.currency.localeCompare(a.currency) || b.form.localeCompare(a.form));
 }
 
 export async function pendingCount() {
