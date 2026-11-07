@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { formatMoney } from "@/lib/format";
 import { custodyBalances, monthlySummary, pendingCount, propertyYields, receivableBalances, type Currency } from "@/lib/reports";
+import { recordedMonthlyAverage } from "@/lib/monthly-average";
 
 export default function HomePage({ searchParams }: PageProps<"/">) {
   return (
@@ -29,10 +30,7 @@ async function Dashboard({ searchParams }: Pick<PageProps<"/">, "searchParams">)
     receivableBalances(currency),
   ]);
 
-  const reportMonths = months.filter((m) => m.hasActivity);
-  const n = reportMonths.length;
-  const avgIncome = n ? reportMonths.reduce((a, m) => a + m.income, 0) / n : 0;
-  const avgSpending = n ? reportMonths.reduce((a, m) => a + m.spending, 0) / n : 0;
+  const { months: reportMonths, count: n, income: avgIncome, spending: avgSpending } = recordedMonthlyAverage(months);
   const totals = (key: "bySource" | "bySpend") => {
     const acc: Record<string, number> = {};
     for (const m of reportMonths) for (const [k, v] of Object.entries(m[key])) acc[k] = (acc[k] ?? 0) + v;
