@@ -27,6 +27,11 @@ test("monthly spending combines private costs and Moni's share without counting 
     [{ month: "2026-10", total: -10, areas: { brasil: -10 }, missingFx: 0 }]);
 });
 
+test("a car purchase keeps the shared balance but is removed from Moni's consumption", () => {
+  const rows = [{ date: "2026-10-02", area: "brasil", amount: -4000, amountUsd: -4000, marcoShare: 0.5, allocations: [], capitalFraction: 0.875 }];
+  assert.equal(partnerMonthly(rows)[0].total, 250);
+});
+
 test("a Moni-paid split creates the right balance without losing cents", () => {
   const split = partnerSplit(101.01, 50);
   assert.deepEqual(split, { marco: "-50.51", moni: "-50.50" });

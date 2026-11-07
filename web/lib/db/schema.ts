@@ -229,6 +229,18 @@ export const valuations = pgTable("valuations", {
   notes: text("notes"),
 });
 
+// The purchase movement remains in account history and is not an additional cash flow.
+export const vehicles = pgTable("vehicles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  acquired: date("acquired").notNull(),
+  price: numeric("price", { precision: 14, scale: 2 }).notNull(),
+  currency: text("currency").notNull(),
+  share: numeric("share", { precision: 5, scale: 4 }).notNull(),
+  annualRate: numeric("annual_rate", { precision: 5, scale: 4 }).notNull(),
+  purchaseTransactionId: uuid("purchase_transaction_id").references(() => transactions.id).notNull(),
+}, (t) => [uniqueIndex("vehicle_purchase_idx").on(t.purchaseTransactionId)]);
+
 export type Entity = typeof entities.$inferSelect;
 export type Account = typeof accounts.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;

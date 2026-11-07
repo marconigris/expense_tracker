@@ -1,7 +1,7 @@
 import type { OwnershipAllocation } from "./allocations";
 import { BUSINESS_PARTNER_AREAS, PRIVATE_PARTNER_AREAS } from "./partner-areas";
 
-export type PartnerMonthlyInput = { date: string; area: string; amount: number; amountUsd: number | null; marcoShare: number; allocations: OwnershipAllocation[] };
+export type PartnerMonthlyInput = { date: string; area: string; amount: number; amountUsd: number | null; marcoShare: number; allocations: OwnershipAllocation[]; capitalFraction?: number };
 
 /** Spending belonging to Moni, regardless of who paid; absent FX remains visible as a gap. */
 export function partnerMonthly(rows: PartnerMonthlyInput[]) {
@@ -20,7 +20,7 @@ export function partnerMonthly(rows: PartnerMonthlyInput[]) {
       const moni = row.allocations.filter((a) => a.owner === "moni").reduce((sum, a) => sum + Number(a.amount), 0);
       ratio = moni / row.amount;
     }
-    const value = -row.amountUsd * ratio;
+    const value = -row.amountUsd * ratio * (1 - (row.capitalFraction ?? 0));
     if (!BUSINESS_PARTNER_AREAS.includes(row.area)) item.total += value;
     item.areas[row.area] = (item.areas[row.area] ?? 0) + value;
   }

@@ -72,6 +72,11 @@ async function main() {
     });
   }
 
+  // Historical Tricount estimate includes the shared EUR 3,500 vehicle purchase.
+  const [carPurchase] = await db.select().from(t.transactions).where(and(eq(t.transactions.dedupeKey, "tricount:historical-estimate:2026-jun"), eq(t.transactions.date, "2026-06-01"), eq(t.transactions.amount, "-8328"), eq(t.transactions.currency, "EUR"), eq(t.transactions.kind, "normal"), eq(t.transactions.status, "confirmed"), eq(t.transactions.entityId, entityIds["hogar-europa"]), eq(t.transactions.paidBy, "moni"))).limit(1);
+  const carAllocations = carPurchase ? await db.select({ id: t.transactionAllocations.id }).from(t.transactionAllocations).where(eq(t.transactionAllocations.transactionId, carPurchase.id)).limit(1) : [];
+  if (carPurchase && !carAllocations.length) await db.insert(t.vehicles).values({ name: "Auto Europa", acquired: "2026-06-01", price: "3500", currency: "EUR", share: "0.5", annualRate: "0.15", purchaseTransactionId: carPurchase.id }).onConflictDoNothing({ target: t.vehicles.purchaseTransactionId });
+
   console.log(`Seeded ${ENTITIES.length} entities and ${ACCOUNTS.length} accounts`);
   process.exit(0);
 }

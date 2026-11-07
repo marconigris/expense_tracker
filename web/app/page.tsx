@@ -73,6 +73,7 @@ async function Dashboard({ searchParams }: Pick<PageProps<"/">, "searchParams">)
           <b>{pending}</b> movimientos sin revisar: los números de abajo todavía no los incluyen →
         </Link>
       )}
+      {months.some((m) => m.missingVehicleFx) && <p className="rounded-xl border border-warn/40 bg-card px-4 py-3 text-sm">Falta cotización para incluir la amortización de algún auto.</p>}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Breakdown title="De dónde viene" rows={totals("bySource")} months={n} money={money} />

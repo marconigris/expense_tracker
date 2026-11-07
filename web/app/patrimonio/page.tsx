@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { VehicleForm } from "./vehicle-form";
 import { connection } from "next/server";
 import { requireOwner } from "@/lib/auth";
 import { formatMoney } from "@/lib/format";
@@ -14,7 +15,7 @@ async function Content() {
   await connection();
   await requireOwner();
   const view = await wealthView();
-  const { items, otherAccounts, cash, placement, properties, totals, missing, rates } = view;
+  const { items, otherAccounts, cash, placement, properties, totals, missing, rates, vehicles, purchases } = view;
   // Past months are rebuilt from movements; the current month is today's live figure.
   const [saved, timeline] = await Promise.all([wealthHistory(totals), wealthTimeline(view)]);
   const thisMonth = new Date().toISOString().slice(0, 7);
@@ -36,6 +37,8 @@ async function Content() {
       })}
     </div>
     {timeline.assumed.length > 0 && <p className="-mt-2 text-xs text-muted">Meses anteriores reconstruidos desde los movimientos importados. Sin movimientos, se toman con el saldo de hoy: {timeline.assumed.join(" · ")}.</p>}
+    <section className="rounded-xl border border-line bg-card p-4 text-sm"><h2 className="font-medium">Autos · tu parte</h2>{vehicles.length ? vehicles.map((v) => <p className="mt-2" key={v.id}>{v.name} · {Math.round(Number(v.share) * 100)}% · {Number(v.annualRate) * 100}% anual · desde {v.acquired.slice(0, 7)}</p>) : <p className="mt-2 text-muted">Todavía no hay autos cargados.</p>}</section>
+    <VehicleForm purchases={purchases.map((p) => ({ id: p.id, label: `${p.date} · ${p.description} · ${formatMoney(Math.abs(Number(p.amount)), p.currency)} ${p.currency}` }))} />
     <h2 className="pt-1 font-medium">Cuentas y fondos</h2>
     {groupAccounts(items).map((group) => <details key={group.region} className="group overflow-hidden rounded-xl border border-line bg-card">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 group-open:border-b group-open:border-line [&::-webkit-details-marker]:hidden">
@@ -79,6 +82,7 @@ const GROUPS = [
   { key: "stocks", label: "Stocks / Fondos / Crypto", tag: "Inversión", hint: "IBKR, Binance, Crypto.com", tone: "bg-white/55" },
   { key: "loans", label: "Préstamos a cobrar", tag: "Ilíquido", hint: "Bora Vida; se cobra cuando la empresa pague", tone: "bg-white/40" },
   { key: "properties", label: "Propiedades", tag: "Ilíquido", hint: "Tu parte del capital aportado", tone: "bg-white/25" },
+  { key: "vehicles", label: "Autos", tag: "Ilíquido", hint: "Tu parte, con amortización", tone: "bg-white/20" },
 ] as const;
 
 const tagClass = "rounded-full border border-white/30 px-1.5 text-[10px] font-normal uppercase tracking-wide opacity-80";

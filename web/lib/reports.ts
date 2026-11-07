@@ -2,6 +2,8 @@ import { and, eq, gt, gte, inArray, ne, sql } from "drizzle-orm";
 import { custodyAmount, custodyForm, marcoReportedAmount, type CustodyForm, type OwnershipAllocation } from "./allocations";
 import { db, t } from "./db";
 import type { Entity } from "./db/schema";
+import { convert } from "./fx";
+import { vehicleValue } from "./vehicle-math";
 
 export type Currency = "USD" | "EUR";
 
@@ -12,6 +14,7 @@ export type MonthSummary = {
   bySource: Record<string, number>;
   bySpend: Record<string, number>;
   hasActivity: boolean;
+  missingVehicleFx: boolean;
 };
 
 /** First day of the month `n` months before the current one. */
@@ -64,16 +67,17 @@ export async function monthlySummary(currency: Currency, months = 12) {
       ),
     );
 
-  const [entities, allocations] = await Promise.all([
+  const [entities, allocations, vehicles] = await Promise.all([
     db.select().from(t.entities),
     allocationsFor(rows.map((r) => r.id)),
+    db.select().from(t.vehicles),
   ]);
   const byId = new Map(entities.map((e) => [e.id, e]));
 
   const summaries = new Map<string, MonthSummary>();
   for (let i = months; i >= 1; i--) {
     const month = monthsAgo(i).slice(0, 7);
-    if (`${month}-01` >= from) summaries.set(month, { month, income: 0, spending: 0, bySource: {}, bySpend: {}, hasActivity: false });
+    if (`${month}-01` >= from) summaries.set(month, { month, income: 0, spending: 0, bySource: {}, bySpend: {}, hasActivity: false, missingVehicleFx: false });
   }
 
   const add = (bucket: Record<string, number>, key: string, v: number) => (bucket[key] = (bucket[key] ?? 0) + v);
@@ -84,7 +88,12 @@ export async function monthlySummary(currency: Currency, months = 12) {
     if (!s || !e) continue;
     const shares = allocations.get(r.id) ?? [];
     const converted = Number(r.converted ?? 0);
-    const value = marcoReportedAmount(Number(r.original), converted, shares, e.kind, Number(e.marcoShare));
+    let value = marcoReportedAmount(Number(r.original), converted, shares, e.kind, Number(e.marcoShare));
+    const vehicle = vehicles.find((v) => v.purchaseTransactionId === r.id);
+    if (vehicle && value < 0 && Number(r.original) < 0 && ["personal", "household"].includes(e.kind)) {
+      const originalShare = Number(vehicle.price) * Number(vehicle.share);
+      value += Math.min(-value, originalShare * Math.abs(converted / Number(r.original)));
+    }
     if (["business", "investment", "property", "personal", "household"].includes(e.kind)) s.hasActivity = true;
     switch (e.kind) {
       case "business":
@@ -101,6 +110,17 @@ export async function monthlySummary(currency: Currency, months = 12) {
       case "household":
         add(s.bySpend, e.name, -value);
         break;
+    }
+  }
+  for (const vehicle of vehicles) {
+    for (const s of summaries.values()) {
+      const terms = { acquired: vehicle.acquired, priceCents: Math.round(Number(vehicle.price) * 100), share: Number(vehicle.share), annualRate: Number(vehicle.annualRate) };
+      const depreciation = vehicleValue(terms, s.month).depreciation / 100;
+      if (!depreciation) continue;
+      const converted = await convert(depreciation, vehicle.currency, `${s.month}-28`);
+      const amount = currency === "USD" ? converted.amountUsd : converted.amountEur;
+      if (amount != null) { add(s.bySpend, "Auto · amortización", Number(amount)); s.hasActivity = true; }
+      else s.missingVehicleFx = true;
     }
   }
   for (const s of summaries.values()) {

@@ -24,7 +24,7 @@ function balance(cents: number, currency: string) {
 }
 async function Content() {
   await connection(); const user = await requirePartner();
-  const [data, own, privateRows, shared] = await Promise.all([
+  const [data, own, privateRows, shared, vehiclePurchases] = await Promise.all([
     sharedReport(),
     db.select().from(t.partnerExpenses).where(eq(t.partnerExpenses.userId, user.id)).orderBy(desc(t.partnerExpenses.date), desc(t.partnerExpenses.createdAt)).limit(100),
     db.select().from(t.partnerExpenses).where(and(eq(t.partnerExpenses.userId, user.id), inArray(t.partnerExpenses.area, PRIVATE_PARTNER_AREAS), isNull(t.partnerExpenses.transactionId))),
@@ -33,6 +33,7 @@ async function Content() {
       .where(and(eq(t.transactions.status, "confirmed"), eq(t.transactions.kind, "normal"),
         eq(t.entities.sharedWithMoni, true), inArray(t.entities.slug, Object.keys(SLUGS)), gte(t.transactions.date, MONI_SETTLEMENT_START),
         or(eq(t.entities.kind, "household"), and(eq(t.entities.slug, "la-mariposa"), lt(t.transactions.amount, "0"), inArray(t.transactions.category, ["Mantenimiento", "Impuestos", "Otros"]))))),
+    db.select({ transactionId: t.vehicles.purchaseTransactionId, price: t.vehicles.price }).from(t.vehicles),
   ]);
   const allocs = shared.length ? await db.select().from(t.transactionAllocations).where(inArray(t.transactionAllocations.transactionId, shared.map((r) => r.id))) : [];
   const allocationMap = new Map<string, OwnershipAllocation[]>();
@@ -40,7 +41,8 @@ async function Content() {
   const months = partnerMonthly([
     ...privateRows.map((r) => ({ date: r.date, area: r.area, amount: Number(r.amount), amountUsd: Number(r.amountUsd), marcoShare: 0, allocations: [] })),
     ...shared.map((r) => ({ date: r.date, area: SLUGS[r.slug], amount: Number(r.amount), amountUsd: r.amountUsd == null ? null : Number(r.amountUsd),
-      marcoShare: Number(r.marcoShare), allocations: allocationMap.get(r.id) ?? [] })),
+      marcoShare: Number(r.marcoShare), allocations: allocationMap.get(r.id) ?? [],
+      capitalFraction: Math.min(1, Number(vehiclePurchases.find((v) => v.transactionId === r.id)?.price ?? 0) / Math.abs(Number(r.amount) || 1)) })),
   ]);
   return <div className="space-y-5"><div><h1 className="text-lg font-semibold">Hola, Moni</h1><p className="text-sm text-muted">Tus gastos y tu balance con Marco</p></div>
     <section className="hero rounded-2xl p-5"><p className="text-sm opacity-80">Balance con Marco</p>{data.totals.length ? data.totals.map((v) => <p key={v.currency} className="mt-2 text-xl font-semibold tabular-nums">{balance(v.cents, v.currency)}</p>) : <p className="mt-2 text-xl font-semibold">Están a mano</p>}<p className="mt-2 text-xs opacity-80">Desde octubre de 2026, con los saldos anteriores incorporados.</p></section>
