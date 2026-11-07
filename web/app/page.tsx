@@ -29,12 +29,13 @@ async function Dashboard({ searchParams }: Pick<PageProps<"/">, "searchParams">)
     receivableBalances(currency),
   ]);
 
-  const n = months.length;
-  const avgIncome = months.reduce((a, m) => a + m.income, 0) / n;
-  const avgSpending = months.reduce((a, m) => a + m.spending, 0) / n;
+  const reportMonths = months.filter((m) => m.hasActivity);
+  const n = reportMonths.length;
+  const avgIncome = n ? reportMonths.reduce((a, m) => a + m.income, 0) / n : 0;
+  const avgSpending = n ? reportMonths.reduce((a, m) => a + m.spending, 0) / n : 0;
   const totals = (key: "bySource" | "bySpend") => {
     const acc: Record<string, number> = {};
-    for (const m of months) for (const [k, v] of Object.entries(m[key])) acc[k] = (acc[k] ?? 0) + v;
+    for (const m of reportMonths) for (const [k, v] of Object.entries(m[key])) acc[k] = (acc[k] ?? 0) + v;
     return Object.entries(acc).sort((a, b) => b[1] - a[1]);
   };
   const money = (v: number) => formatMoney(v, currency);
@@ -42,7 +43,7 @@ async function Dashboard({ searchParams }: Pick<PageProps<"/">, "searchParams">)
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Últimos 12 meses</h1>
+        <h1 className="text-lg font-semibold">Últimos meses completos</h1>
         <div className="flex overflow-hidden rounded-lg border border-line text-sm">
           {(["USD", "EUR"] as const).map((c) => (
             <Link key={c} href={c === "USD" ? "/" : "/?moneda=EUR"} className={`px-3 py-1 ${c === currency ? "bg-accent text-white" : "text-muted"}`}>
@@ -53,7 +54,7 @@ async function Dashboard({ searchParams }: Pick<PageProps<"/">, "searchParams">)
       </div>
 
       <section className="hero rounded-2xl p-5">
-        <p className="text-sm opacity-80">Te queda por mes, en promedio</p>
+        <p className="text-sm opacity-80">Te queda por mes, en promedio · {n} {n === 1 ? "mes" : "meses"} con datos</p>
         <p className={`text-3xl font-semibold tabular-nums ${avgIncome - avgSpending < 0 ? "text-red-300" : ""}`}>
           {money(avgIncome - avgSpending)}
         </p>

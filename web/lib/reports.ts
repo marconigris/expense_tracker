@@ -11,6 +11,7 @@ export type MonthSummary = {
   spending: number; // Marco's consumption, positive number
   bySource: Record<string, number>;
   bySpend: Record<string, number>;
+  hasActivity: boolean;
 };
 
 /** First day of the month `n` months before the current one. */
@@ -43,7 +44,7 @@ async function allocationsFor(ids: string[]) {
  */
 export async function monthlySummary(currency: Currency, months = 12) {
   const amount = currency === "USD" ? t.transactions.amountUsd : t.transactions.amountEur;
-  const from = monthsAgo(months - 1);
+  const from = [monthsAgo(months), "2026-01-01"].sort().at(-1)!;
   const reportDate = sql<string>`coalesce(${t.transactions.recognitionDate}, ${t.transactions.date})::text`;
   const rows = await db
     .select({
@@ -70,9 +71,9 @@ export async function monthlySummary(currency: Currency, months = 12) {
   const byId = new Map(entities.map((e) => [e.id, e]));
 
   const summaries = new Map<string, MonthSummary>();
-  for (let i = months - 1; i >= 0; i--) {
+  for (let i = months; i >= 1; i--) {
     const month = monthsAgo(i).slice(0, 7);
-    summaries.set(month, { month, income: 0, spending: 0, bySource: {}, bySpend: {} });
+    if (`${month}-01` >= from) summaries.set(month, { month, income: 0, spending: 0, bySource: {}, bySpend: {}, hasActivity: false });
   }
 
   const add = (bucket: Record<string, number>, key: string, v: number) => (bucket[key] = (bucket[key] ?? 0) + v);
@@ -84,6 +85,7 @@ export async function monthlySummary(currency: Currency, months = 12) {
     const shares = allocations.get(r.id) ?? [];
     const converted = Number(r.converted ?? 0);
     const value = marcoReportedAmount(Number(r.original), converted, shares, e.kind, Number(e.marcoShare));
+    if (["business", "investment", "property", "personal", "household"].includes(e.kind)) s.hasActivity = true;
     switch (e.kind) {
       case "business":
       case "investment":
