@@ -31,6 +31,8 @@ async function Dashboard({ searchParams }: Pick<PageProps<"/">, "searchParams">)
   ]);
 
   const { months: reportMonths, count: n, income: avgIncome, spending: avgSpending } = recordedMonthlyAverage(months);
+  const periodIncome = reportMonths.reduce((sum, month) => sum + month.income, 0);
+  const periodSpending = reportMonths.reduce((sum, month) => sum + month.spending, 0);
   const totals = (key: "bySource" | "bySpend") => {
     const acc: Record<string, number> = {};
     for (const m of reportMonths) for (const [k, v] of Object.entries(m[key])) acc[k] = (acc[k] ?? 0) + v;
@@ -51,19 +53,28 @@ async function Dashboard({ searchParams }: Pick<PageProps<"/">, "searchParams">)
         </div>
       </div>
 
-      <section className="hero rounded-2xl p-5">
-        <p className="text-sm opacity-80">Te queda por mes, en promedio · {n} {n === 1 ? "mes" : "meses"} con datos</p>
-        <p className={`text-3xl font-semibold tabular-nums ${avgIncome - avgSpending < 0 ? "text-red-300" : ""}`}>
-          {money(avgIncome - avgSpending)}
-        </p>
-        <div className="mt-3 flex gap-6 text-sm">
-          <div>
-            <p className="opacity-70">Entra</p>
-            <p className="font-medium tabular-nums">{money(avgIncome)}/mes</p>
+      <section className="hero rounded-2xl p-5 sm:flex sm:items-center sm:justify-between sm:gap-8">
+        <div>
+          <p className="text-sm opacity-80">Te queda por mes, en promedio · {n} {n === 1 ? "mes" : "meses"} con datos</p>
+          <p className={`text-3xl font-semibold tabular-nums ${avgIncome - avgSpending < 0 ? "text-red-300" : ""}`}>
+            {money(avgIncome - avgSpending)}
+          </p>
+          <div className="mt-3 flex gap-6 text-sm">
+            <div>
+              <p className="opacity-70">Entra</p>
+              <p className="font-medium tabular-nums">{money(avgIncome)}/mes</p>
+            </div>
+            <div>
+              <p className="opacity-70">Consumís</p>
+              <p className="font-medium tabular-nums">{money(avgSpending)}/mes</p>
+            </div>
           </div>
-          <div>
-            <p className="opacity-70">Consumís</p>
-            <p className="font-medium tabular-nums">{money(avgSpending)}/mes</p>
+        </div>
+        <div className="mt-4 border-t border-white/20 pt-3 sm:mt-0 sm:min-w-44 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">
+          <p className="text-sm opacity-80">Total · {n} {n === 1 ? "mes" : "meses"}</p>
+          <div className="mt-2 grid grid-cols-2 gap-6 text-sm sm:gap-4">
+            <div><p className="opacity-70">Ingresos</p><p className="font-medium tabular-nums">{money(periodIncome)}</p></div>
+            <div><p className="opacity-70">Gastos</p><p className="font-medium tabular-nums">{money(periodSpending)}</p></div>
           </div>
         </div>
       </section>
